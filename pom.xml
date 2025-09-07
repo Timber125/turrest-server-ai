@@ -127,7 +127,6 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <version>1.4.200</version>
-            <scope>runtime</scope>
         </dependency>
     </dependencies>
 
@@ -140,15 +139,12 @@
                 <configuration>
                     <configFiles>src/main/resources/application.properties</configFiles>
                     <baselineOnMigrate>true</baselineOnMigrate>
-                    <user>***</user>
-                    <password>***</password>
-                    <schemas>
-                        <schema>public</schema>
-                    </schemas>
+                    <user>sa</user>
+                    <password>password</password>
                     <placeholders>
                     </placeholders>
-                    <url>TBD</url>
-                    <driver>org.postgresql.Driver</driver>
+                    <url>jdbc:h2:file:C:/data/turrest/db</url>
+                    <driver>org.h2.Driver</driver>
                 </configuration>
             </plugin>
         </plugins>
