@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class StartLobbyGameHandler extends CommandTopicHandler<StartLobbyGameCommand> {
 
-    public StartLobbyGameHandler(String subject, String topic) {
-        super(subject, topic);
+    public StartLobbyGameHandler() {
+        super(StartLobbyGameCommand.SUBJECT.name(), StartLobbyGameCommand.TOPIC);
     }
 
     @Override

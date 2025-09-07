@@ -19,9 +19,9 @@ public class GameService {
     }
 
     public void startGame(List<SocketHandler> lobbyPlayers){
-        Game game = new Game(lobbyPlayers);
-        games.put(game.getGameID(), game);
-        game.start();
+        //Game game = new Game(lobbyPlayers);
+        //games.put(game.getGameID(), game);
+        //game.start();
     }
 
 }
