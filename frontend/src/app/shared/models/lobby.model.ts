@@ -1,9 +1,19 @@
+export interface LobbyPlayer {
+  id: string;
+  name: string;
+  colorIndex: number;
+  ready: boolean;
+}
+
 export interface Lobby {
   id: string;
   size: number;
   hidden: boolean;
   password?: string;
   game: string;
+  hostId?: string;
+  players?: LobbyPlayer[];
+  allReady?: boolean;
 }
 
 export interface CreateLobbyRequest {

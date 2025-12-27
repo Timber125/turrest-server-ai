@@ -1,9 +1,10 @@
 import { Injectable, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { Subject, Observable, filter, map } from 'rxjs';
 import { SocketCommand, ClientSocketSubject, SocketTopic } from '../../shared/models';
 import { AuthService } from './auth.service';
 
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error' | 'server_down';
 
 @Injectable({
   providedIn: 'root'
@@ -20,10 +21,10 @@ export class SocketService {
   private connectionState = signal<ConnectionState>('disconnected');
   readonly state = this.connectionState.asReadonly();
 
-  private refreshTokenInProgress = false;
+  private tokenRejected = false;  // Flag to prevent reconnect after explicit token rejection
   private tabId: string;
 
-  constructor(private authService: AuthService) {
+  constructor(private authService: AuthService, private router: Router) {
     this.tabId = sessionStorage.getItem('turrest_tab_id') || '';
     if (!this.tabId) {
       this.tabId = crypto.randomUUID();
@@ -36,6 +37,7 @@ export class SocketService {
       return;
     }
 
+    this.tokenRejected = false;  // Reset on fresh connection attempt
     this.connectionState.set('connecting');
 
     try {
@@ -44,7 +46,7 @@ export class SocketService {
       this.socket.onopen = () => {
         console.log('WebSocket connected');
         this.connectionState.set('connected');
-        this.reconnectAttempts = 0;
+        // Note: Don't reset reconnectAttempts here - only reset after successful auth
         this.authenticate();
       };
 
@@ -57,6 +59,9 @@ export class SocketService {
             this.handleTokenInvalid();
             return;
           }
+
+          // Any successful message means we're authenticated - reset reconnect counter
+          this.reconnectAttempts = 0;
 
           this.messageSubject.next(command);
         } catch (e) {
@@ -94,6 +99,12 @@ export class SocketService {
   }
 
   private attemptReconnect(): void {
+    // Don't reconnect if token was explicitly rejected by server
+    if (this.tokenRejected) {
+      console.log('Token was rejected - not attempting reconnect');
+      return;
+    }
+
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
@@ -104,7 +115,20 @@ export class SocketService {
           this.connect();
         }
       }, delay);
+    } else {
+      // Server appears to be down - logout user
+      console.error('Max reconnect attempts reached. Server appears to be down.');
+      this.connectionState.set('server_down');
+      this.forceLogout('Server is unavailable. Please try again later.');
     }
+  }
+
+  private forceLogout(message: string): void {
+    console.warn('Forcing logout:', message);
+    this.authService.markSessionInvalidated();
+    this.disconnect();
+    this.authService.logout();
+    this.router.navigate(['/login']);
   }
 
   disconnect(): void {
@@ -116,24 +140,9 @@ export class SocketService {
   }
 
   private handleTokenInvalid(): void {
-    if (this.refreshTokenInProgress) return;
-    this.refreshTokenInProgress = true;
-
-    console.warn('Token invalid, attempting refresh...');
-    this.authService.refreshToken().subscribe({
-      next: () => {
-        console.log('Token refreshed successfully, reconnecting...');
-        this.refreshTokenInProgress = false;
-        this.disconnect();
-        this.connect();
-      },
-      error: (err) => {
-        console.error('Token refresh failed:', err);
-        this.refreshTokenInProgress = false;
-        this.authService.logout();
-        // Redirect to login could be handled here or via AuthGuard/service
-      }
-    });
+    console.warn('Token rejected by server - logging out immediately');
+    this.tokenRejected = true;  // Prevent reconnection attempts
+    this.forceLogout('Your session is invalid. Please login again.');
   }
 
   sendCommand(subject: string, topic: string, data: Record<string, any> = {}): void {

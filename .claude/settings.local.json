@@ -11,7 +11,28 @@
       "mcp__plugin_playwright_playwright__browser_click",
       "Bash(curl:*)",
       "Bash(./mvnw:*)",
-      "Bash(mvn spring-boot:run:*)"
+      "Bash(mvn spring-boot:run:*)",
+      "Bash(where java:*)",
+      "Skill(document-skills:skill-creator)",
+      "Bash(python:*)",
+      "Bash(C:/users/timil/commands/switch_java.bat:*)",
+      "Bash(JAVA_HOME=\"C:\\\\Users\\\\timil\\\\.jdks\\\\corretto-17.0.16\" PATH=\"$JAVA_HOME/bin:$PATH\" java -version)",
+      "Bash(JAVA_HOME=\"C:\\\\Users\\\\timil\\\\.jdks\\\\corretto-17.0.16\" PATH=\"$JAVA_HOME/bin:$PATH\" mvn compile)",
+      "Bash(export JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\")",
+      "Bash(export PATH=\"$JAVA_HOME/bin:$PATH\")",
+      "Bash(where mvn:*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" compile:*)",
+      "mcp__plugin_playwright_playwright__browser_close",
+      "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\":*)",
+      "Bash(npx ng build:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "Bash(taskkill:*)",
+      "mcp__plugin_playwright_playwright__browser_wait_for",
+      "mcp__plugin_playwright_playwright__browser_console_messages",
+      "mcp__plugin_playwright_playwright__browser_network_requests",
+      "mcp__plugin_playwright_playwright__browser_press_key",
+      "Bash(kill:*)"
     ]
   }
 }

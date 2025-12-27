@@ -2,11 +2,13 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, Hos
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { LobbyService, SocketService, AuthService } from '../../core/services';
-import { TerrainType, Tile } from '../../shared/models';
+import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS } from '../../shared/models';
+import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
 import { TileInfoComponent } from './components/tile-info/tile-info.component';
 import { ActionPanelComponent } from './components/action-panel/action-panel.component';
 import { MinimapComponent } from './components/minimap/minimap.component';
+import { ResourceBarComponent } from './components/resource-bar/resource-bar.component';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -17,12 +19,14 @@ import { Subscription } from 'rxjs';
     ChatComponent,
     TileInfoComponent,
     ActionPanelComponent,
-    MinimapComponent
+    MinimapComponent,
+    ResourceBarComponent
   ],
   template: `
     <div class="game-container">
       <header class="game-header">
         <button class="btn-back" (click)="leaveGame()">← Leave Game</button>
+        <app-resource-bar [resources]="resources"></app-resource-bar>
         <h1>{{ lobbyService.activeLobby()?.game || 'TURREST' }}</h1>
         <div class="game-controls-header">
           <span class="zoom-label">Zoom: {{ Math.round(zoom * 100) }}%</span>
@@ -31,6 +35,9 @@ import { Subscription } from 'rxjs';
           <button (click)="resetView()">Reset</button>
         </div>
         <div class="user-info">
+          <div class="player-color-indicator" [style.background-color]="getMyPlayerColor()">
+            <span class="player-number">P{{ myPlayerNumber }}</span>
+          </div>
           <span>{{ authService.user()?.username }}</span>
         </div>
       </header>
@@ -40,6 +47,7 @@ import { Subscription } from 'rxjs';
           <div class="game-canvas-container" #canvasContainer>
             <canvas
               #gameCanvas
+              [class.placement-mode]="placementMode !== null"
               (mousedown)="onMouseDown($event)"
               (mousemove)="onMouseMove($event)"
               (mouseup)="onMouseUp($event)"
@@ -60,12 +68,15 @@ import { Subscription } from 'rxjs';
                 <p class="hint">The game engine will send tile updates here.</p>
               </div>
             }
+            @if (errorMessage) {
+              <div class="error-toast">{{ errorMessage }}</div>
+            }
           </div>
 
           <div class="bottom-pane">
             <!-- Left: Selected Tile Info -->
             <app-tile-info
-               class="pane-section-wrapper tile-info" 
+               class="pane-section-wrapper tile-info"
                [selectedTile]="selectedTile">
             </app-tile-info>
 
@@ -73,7 +84,11 @@ import { Subscription } from 'rxjs';
             <app-action-panel
                class="pane-section-wrapper actions-pane"
                [selectedTile]="selectedTile"
-               (actionTriggered)="onActionTriggered($event)">
+               [resources]="resources"
+               [placementMode]="placementMode"
+               (actionTriggered)="onActionTriggered($event)"
+               (buildingSelected)="onBuildingSelected($event)"
+               (placementCancelled)="cancelPlacementMode()">
             </app-action-panel>
 
             <!-- Right: Minimap -->
@@ -116,6 +131,7 @@ import { Subscription } from 'rxjs';
       background: #0f0f23;
       border-bottom: 1px solid #333;
       flex-shrink: 0;
+      gap: 1rem;
     }
 
     .game-header h1 {
@@ -163,8 +179,29 @@ import { Subscription } from 'rxjs';
     }
 
     .user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       color: #fff;
       font-size: 0.9rem;
+    }
+
+    .player-color-indicator {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid #fff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    .player-number {
+      font-weight: bold;
+      font-size: 0.85rem;
+      color: #fff;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
     }
 
     .game-content {
@@ -204,6 +241,10 @@ import { Subscription } from 'rxjs';
       cursor: grabbing;
     }
 
+    canvas.placement-mode {
+      cursor: crosshair;
+    }
+
     .game-overlay {
       position: absolute;
       top: 50%;
@@ -221,6 +262,26 @@ import { Subscription } from 'rxjs';
     .hint {
       font-size: 0.8rem;
       font-style: italic;
+    }
+
+    .error-toast {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 0, 0, 0.8);
+      color: #fff;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: bold;
+      animation: fadeInOut 3s ease-in-out;
+    }
+
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+      80% { opacity: 1; }
+      100% { opacity: 0; }
     }
 
     /* Bottom Pane */
@@ -272,6 +333,22 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   tiles: Map<string, Tile> = new Map();
 
+  // Resources
+  resources: PlayerResources = { wood: 100, stone: 100, gold: 100 };
+
+  // Player info
+  myPlayerNumber = 0;  // Set from server on game start
+  myColorIndex = 0;    // Color index from lobby selection
+  playerColorMap: Map<number, number> = new Map(); // playerNumber -> colorIndex
+
+  // Placement mode
+  placementMode: BuildingDefinition | null = null;
+  hoverTileX = -1;
+  hoverTileY = -1;
+
+  // Error message
+  errorMessage: string | null = null;
+
   // Viewport / camera
   cameraX = 0;
   cameraY = 0;
@@ -315,6 +392,10 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private readonly BASE_TILE_SIZE = 32;
 
+  // Road autotiling images (16 variations based on NESW connections)
+  private roadImages: Map<string, HTMLImageElement> = new Map();
+  private roadImagesLoaded = false;
+
   constructor(
     public lobbyService: LobbyService,
     public authService: AuthService,
@@ -323,7 +404,15 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   ) { }
 
   ngOnInit(): void {
-    // Listen for tile changes from server
+    // Listen for tile updates (new format with structure data)
+    const tileUpdateSub = this.socketService.onCommand('GAME', 'TILE_UPDATE')
+      .subscribe(cmd => {
+        this.hasReceivedTiles = true;
+        this.handleTileUpdate(cmd.data);
+      });
+    this.subscriptions.push(tileUpdateSub);
+
+    // Legacy: Listen for tile changes (old format)
     const tileSub = this.socketService.onCommand('GAME', 'TILE_CHANGED')
       .subscribe(cmd => {
         this.hasReceivedTiles = true;
@@ -331,14 +420,58 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     this.subscriptions.push(tileSub);
 
+    // Listen for resource updates
+    const resourceSub = this.socketService.onCommand('GAME', 'RESOURCE_UPDATE')
+      .subscribe(cmd => {
+        this.handleResourceUpdate(cmd.data);
+      });
+    this.subscriptions.push(resourceSub);
+
+    // Listen for building changes
+    const buildingSub = this.socketService.onCommand('GAME', 'BUILDING_CHANGED')
+      .subscribe(cmd => {
+        this.handleBuildingChanged(cmd.data);
+      });
+    this.subscriptions.push(buildingSub);
+
+    // Listen for error messages
+    const errorSub = this.socketService.onCommand('GAME', 'ERROR_MESSAGE')
+      .subscribe(cmd => {
+        this.showError(cmd.data['message'] as string);
+      });
+    this.subscriptions.push(errorSub);
+
     // Listen for countdown
     const countdownSub = this.socketService.onCommand('GAME', 'COUNTDOWN')
       .subscribe(cmd => {
         this.countdown = cmd.data['seconds'];
-        this.hasReceivedTiles = false; // Reset to show countdown
+        this.hasReceivedTiles = false;
         this.startLocalCountdown();
       });
     this.subscriptions.push(countdownSub);
+
+    // Listen for player info (tells us our player number and color)
+    const playerInfoSub = this.socketService.onCommand('GAME', 'PLAYER_INFO')
+      .subscribe(cmd => {
+        this.myPlayerNumber = cmd.data['playerNumber'] as number;
+        this.myColorIndex = cmd.data['colorIndex'] as number;
+        console.log('Received player info - player number:', this.myPlayerNumber, 'colorIndex:', this.myColorIndex);
+      });
+    this.subscriptions.push(playerInfoSub);
+
+    // Listen for full map (bulk load - much faster than tile-by-tile)
+    const fullMapSub = this.socketService.onCommand('GAME', 'FULL_MAP')
+      .subscribe(cmd => {
+        this.handleFullMap(cmd.data);
+      });
+    this.subscriptions.push(fullMapSub);
+  }
+
+  private showError(message: string): void {
+    this.errorMessage = message;
+    setTimeout(() => {
+      this.errorMessage = null;
+    }, 3000);
   }
 
   private startLocalCountdown(): void {
@@ -357,10 +490,36 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.ctx = canvas.getContext('2d')!;
 
     this.resizeCanvas();
+    this.loadRoadImages();
     this.render();
 
-    // Listen for window resize
     window.addEventListener('resize', () => this.onResize());
+  }
+
+  private loadRoadImages(): void {
+    const variations = [
+      '0000', '1000', '0100', '0010', '0001',
+      '1100', '1010', '0101', '1001', '0110', '0011',
+      '1110', '1101', '1011', '0111', '1111'
+    ];
+
+    let loadedCount = 0;
+    for (const v of variations) {
+      const img = new Image();
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === variations.length) {
+          this.roadImagesLoaded = true;
+          this.render();
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        console.warn(`Failed to load road image: road_${v}.png`);
+      };
+      img.src = `/assets/tiles/roads/road_${v}.png`;
+      this.roadImages.set(v, img);
+    }
   }
 
   ngOnDestroy(): void {
@@ -374,13 +533,19 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.render();
   }
 
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape' && this.placementMode) {
+      this.cancelPlacementMode();
+    }
+  }
+
   private resizeCanvas(): void {
     const container = this.containerRef.nativeElement;
     const canvas = this.canvasRef.nativeElement;
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
 
-    // Update public properties for minimap
     this.mainCanvasWidth = canvas.width;
     this.mainCanvasHeight = canvas.height;
   }
@@ -389,19 +554,29 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.BASE_TILE_SIZE * this.zoom;
   }
 
-  private handleTileChanged(data: Record<string, any>): void {
+  private handleTileUpdate(data: Record<string, any>): void {
     const x = data['x'] as number;
     const y = data['y'] as number;
-    const terrainType = data['newTerrainType'] as number;
+    const terrainType = data['terrainType'] as number;
+    const structureType = data['structureType'] as number | undefined;
+    const buildingType = data['buildingType'] as number | undefined;
+    const ownerPlayerNumber = data['ownerPlayerNumber'] as number | undefined;
+    const owners = data['owners'] as number[] | undefined;
 
-    const tile: Tile = { x, y, terrainType };
+    const tile: Tile = {
+      x,
+      y,
+      terrainType,
+      structureType: structureType !== undefined ? structureType : undefined,
+      buildingType,
+      ownerPlayerNumber,
+      owners: owners || []
+    };
     this.tiles.set(`${x},${y}`, tile);
 
-    // Track map bounds
     this.mapMaxX = Math.max(this.mapMaxX, x + 1);
     this.mapMaxY = Math.max(this.mapMaxY, y + 1);
 
-    // Update selected tile if it changed
     if (this.selectedTileX === x && this.selectedTileY === y) {
       this.selectedTile = tile;
     }
@@ -413,21 +588,109 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.render();
   }
 
+  private handleTileChanged(data: Record<string, any>): void {
+    const x = data['x'] as number;
+    const y = data['y'] as number;
+    const terrainType = data['newTerrainType'] as number;
+
+    const existingTile = this.tiles.get(`${x},${y}`);
+    const tile: Tile = {
+      x,
+      y,
+      terrainType,
+      structureType: existingTile?.structureType,
+      buildingType: existingTile?.buildingType,
+      ownerPlayerNumber: existingTile?.ownerPlayerNumber
+    };
+    this.tiles.set(`${x},${y}`, tile);
+
+    this.mapMaxX = Math.max(this.mapMaxX, x + 1);
+    this.mapMaxY = Math.max(this.mapMaxY, y + 1);
+
+    if (this.selectedTileX === x && this.selectedTileY === y) {
+      this.selectedTile = tile;
+    }
+
+    if (!this.hasReceivedTiles) {
+      this.hasReceivedTiles = true;
+    }
+
+    this.render();
+  }
+
+  private handleResourceUpdate(data: Record<string, any>): void {
+    this.resources = {
+      wood: data['wood'] as number,
+      stone: data['stone'] as number,
+      gold: data['gold'] as number
+    };
+  }
+
+  private handleBuildingChanged(data: Record<string, any>): void {
+    const x = data['x'] as number;
+    const y = data['y'] as number;
+    const buildingType = data['buildingType'] as number;
+    const playerNumber = data['playerNumber'] as number;
+
+    const tile = this.tiles.get(`${x},${y}`);
+    if (tile) {
+      tile.structureType = StructureType.BUILDING;
+      tile.buildingType = buildingType;
+      tile.ownerPlayerNumber = playerNumber;
+      this.render();
+    }
+  }
+
+  private handleFullMap(data: Record<string, any>): void {
+    const width = data['width'] as number;
+    const height = data['height'] as number;
+    const tilesData = data['tiles'] as Array<Record<string, any>>;
+    const colorMap = data['playerColorMap'] as Record<string, number> | undefined;
+
+    console.log(`Received full map: ${width}x${height} with ${tilesData.length} tiles`);
+
+    // Store player color mapping (playerNumber -> colorIndex)
+    if (colorMap) {
+      this.playerColorMap.clear();
+      for (const [playerNum, colorIdx] of Object.entries(colorMap)) {
+        this.playerColorMap.set(parseInt(playerNum), colorIdx);
+      }
+      console.log('Player color map:', this.playerColorMap);
+    }
+
+    this.mapMaxX = width;
+    this.mapMaxY = height;
+    this.tiles.clear();
+
+    for (const tileData of tilesData) {
+      const tile: Tile = {
+        x: tileData['x'] as number,
+        y: tileData['y'] as number,
+        terrainType: tileData['terrainType'] as number,
+        structureType: tileData['structureType'] as number | undefined,
+        buildingType: tileData['buildingType'] as number | undefined,
+        ownerPlayerNumber: tileData['ownerPlayerNumber'] as number | undefined,
+        owners: tileData['owners'] as number[] || []
+      };
+      this.tiles.set(`${tile.x},${tile.y}`, tile);
+    }
+
+    this.hasReceivedTiles = true;
+    this.render();
+  }
+
   private render(): void {
     const canvas = this.canvasRef.nativeElement;
     const ctx = this.ctx;
 
-    // Clear canvas
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Calculate visible tile range for performance
     const startTileX = Math.max(0, Math.floor(this.cameraX / this.tileSize));
     const startTileY = Math.max(0, Math.floor(this.cameraY / this.tileSize));
     const endTileX = Math.ceil((this.cameraX + canvas.width) / this.tileSize);
     const endTileY = Math.ceil((this.cameraY + canvas.height) / this.tileSize);
 
-    // Draw visible tiles
     for (let x = startTileX; x <= endTileX; x++) {
       for (let y = startTileY; y <= endTileY; y++) {
         const tile = this.tiles.get(`${x},${y}`);
@@ -437,12 +700,15 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       }
     }
 
-    // Draw grid overlay
     this.drawGrid();
 
-    // Draw selection highlight
     if (this.selectedTile) {
       this.drawSelection();
+    }
+
+    // Draw placement preview
+    if (this.placementMode && this.hoverTileX >= 0 && this.hoverTileY >= 0) {
+      this.drawPlacementPreview();
     }
   }
 
@@ -450,9 +716,41 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     const screenX = tile.x * this.tileSize - this.cameraX;
     const screenY = tile.y * this.tileSize - this.cameraY;
 
+    // Draw terrain
     const color = this.getTerrainColor(tile.terrainType);
     this.ctx.fillStyle = color;
     this.ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+
+    // Draw road overlay with autotiling
+    if (tile.structureType === StructureType.ROAD) {
+      const variation = this.getRoadVariation(tile.x, tile.y);
+      const img = this.roadImages.get(variation);
+
+      if (img && img.complete && img.naturalWidth > 0) {
+        // Draw road image
+        this.ctx.drawImage(img, screenX, screenY, this.tileSize, this.tileSize);
+      } else {
+        // Fallback to colored square if images not loaded
+        this.ctx.fillStyle = '#c4a574';
+        const roadPadding = this.tileSize * 0.15;
+        this.ctx.fillRect(
+          screenX + roadPadding,
+          screenY + roadPadding,
+          this.tileSize - roadPadding * 2,
+          this.tileSize - roadPadding * 2
+        );
+      }
+    }
+
+    // Draw building
+    if (tile.structureType === StructureType.BUILDING && tile.buildingType !== undefined) {
+      this.drawBuilding(screenX, screenY, tile.buildingType, tile.ownerPlayerNumber);
+    }
+
+    // Draw ownership contour (only on edges where ownership differs from neighbor)
+    if (tile.owners && tile.owners.length > 0) {
+      this.drawOwnershipContour(tile.x, tile.y, screenX, screenY, tile.owners);
+    }
 
     // Draw border
     this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
@@ -460,12 +758,132 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.ctx.strokeRect(screenX, screenY, this.tileSize, this.tileSize);
   }
 
+  private drawOwnershipContour(tileX: number, tileY: number, screenX: number, screenY: number, owners: number[]): void {
+    const contourWidth = 3;
+
+    // For each owner, only draw border on sides where neighbor has different ownership
+    for (const owner of owners) {
+      // Look up the color index for this player number
+      const colorIndex = this.playerColorMap.get(owner) ?? owner;
+      this.ctx.strokeStyle = getPlayerColor(colorIndex);
+      this.ctx.lineWidth = contourWidth;
+
+      // Check each direction: N, E, S, W
+      const directions = [
+        { dx: 0, dy: -1, side: 'top' },    // North
+        { dx: 1, dy: 0, side: 'right' },   // East
+        { dx: 0, dy: 1, side: 'bottom' },  // South
+        { dx: -1, dy: 0, side: 'left' }    // West
+      ];
+
+      for (const dir of directions) {
+        const neighborTile = this.tiles.get(`${tileX + dir.dx},${tileY + dir.dy}`);
+        const neighborOwners = neighborTile?.owners || [];
+
+        // Draw border if neighbor doesn't have this owner
+        if (!neighborOwners.includes(owner)) {
+          this.ctx.beginPath();
+          const offset = contourWidth / 2;
+
+          switch (dir.side) {
+            case 'top':
+              this.ctx.moveTo(screenX, screenY + offset);
+              this.ctx.lineTo(screenX + this.tileSize, screenY + offset);
+              break;
+            case 'right':
+              this.ctx.moveTo(screenX + this.tileSize - offset, screenY);
+              this.ctx.lineTo(screenX + this.tileSize - offset, screenY + this.tileSize);
+              break;
+            case 'bottom':
+              this.ctx.moveTo(screenX, screenY + this.tileSize - offset);
+              this.ctx.lineTo(screenX + this.tileSize, screenY + this.tileSize - offset);
+              break;
+            case 'left':
+              this.ctx.moveTo(screenX + offset, screenY);
+              this.ctx.lineTo(screenX + offset, screenY + this.tileSize);
+              break;
+          }
+          this.ctx.stroke();
+        }
+      }
+    }
+  }
+
+  private getRoadVariation(x: number, y: number): string {
+    const n = this.hasRoad(x, y - 1) ? '1' : '0';
+    const e = this.hasRoad(x + 1, y) ? '1' : '0';
+    const s = this.hasRoad(x, y + 1) ? '1' : '0';
+    const w = this.hasRoad(x - 1, y) ? '1' : '0';
+    return n + e + s + w;
+  }
+
+  private hasRoad(x: number, y: number): boolean {
+    const tile = this.tiles.get(`${x},${y}`);
+    return tile?.structureType === StructureType.ROAD;
+  }
+
+  private drawBuilding(screenX: number, screenY: number, buildingType: number, ownerPlayerNumber?: number): void {
+    const building = BUILDING_DEFINITIONS.find(b => b.id === buildingType);
+    if (!building) return;
+
+    // Draw building background
+    this.ctx.fillStyle = 'rgba(100, 100, 100, 0.7)';
+    const padding = this.tileSize * 0.1;
+    this.ctx.fillRect(screenX + padding, screenY + padding, this.tileSize - padding * 2, this.tileSize - padding * 2);
+
+    // Draw building icon
+    this.ctx.font = `${this.tileSize * 0.5}px Arial`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillStyle = '#fff';
+    this.ctx.fillText(building.icon, screenX + this.tileSize / 2, screenY + this.tileSize / 2);
+  }
+
+  private drawPlacementPreview(): void {
+    const tile = this.tiles.get(`${this.hoverTileX},${this.hoverTileY}`);
+    if (!tile || !this.placementMode) return;
+
+    const screenX = this.hoverTileX * this.tileSize - this.cameraX;
+    const screenY = this.hoverTileY * this.tileSize - this.cameraY;
+
+    const canPlace = this.canPlaceBuilding(tile, this.placementMode);
+    const color = canPlace ? 'rgba(0, 150, 255, 0.5)' : 'rgba(255, 0, 0, 0.5)';
+
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
+
+    // Draw building icon preview
+    this.ctx.font = `${this.tileSize * 0.5}px Arial`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillStyle = canPlace ? '#fff' : '#ffaaaa';
+    this.ctx.fillText(this.placementMode.icon, screenX + this.tileSize / 2, screenY + this.tileSize / 2);
+  }
+
+  private canPlaceBuilding(tile: Tile, building: BuildingDefinition): boolean {
+    // Check ownership - player can only build on their own territory
+    if (!tile.owners || !tile.owners.includes(this.myPlayerNumber)) {
+      return false;
+    }
+    // Check terrain
+    if (!building.allowedTerrains.includes(tile.terrainType)) {
+      return false;
+    }
+    // Check for existing structure
+    if (tile.structureType !== undefined) {
+      return false;
+    }
+    // Check resources
+    return this.resources.wood >= building.cost.wood &&
+           this.resources.stone >= building.cost.stone &&
+           this.resources.gold >= building.cost.gold;
+  }
+
   private drawGrid(): void {
     const canvas = this.canvasRef.nativeElement;
     this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
     this.ctx.lineWidth = 1;
 
-    // Vertical lines
     const startX = -(this.cameraX % this.tileSize);
     for (let x = startX; x < canvas.width; x += this.tileSize) {
       this.ctx.beginPath();
@@ -474,7 +892,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       this.ctx.stroke();
     }
 
-    // Horizontal lines
     const startY = -(this.cameraY % this.tileSize);
     for (let y = startY; y < canvas.height; y += this.tileSize) {
       this.ctx.beginPath();
@@ -491,6 +908,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Mouse event handlers for panning
   onMouseDown(event: MouseEvent): void {
+    if (this.placementMode) return; // Don't drag in placement mode
     this.isDragging = true;
     this.hasDragged = false;
     this.lastMouseX = event.clientX;
@@ -498,12 +916,27 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   onMouseMove(event: MouseEvent): void {
+    const canvas = this.canvasRef.nativeElement;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Update hover tile for placement preview
+    if (this.placementMode) {
+      const tileX = Math.floor((this.cameraX + mouseX) / this.tileSize);
+      const tileY = Math.floor((this.cameraY + mouseY) / this.tileSize);
+      if (tileX !== this.hoverTileX || tileY !== this.hoverTileY) {
+        this.hoverTileX = tileX;
+        this.hoverTileY = tileY;
+        this.render();
+      }
+    }
+
     if (!this.isDragging) return;
 
     const deltaX = event.clientX - this.lastMouseX;
     const deltaY = event.clientY - this.lastMouseY;
 
-    // Mark as dragged if moved more than 3 pixels
     if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
       this.hasDragged = true;
     }
@@ -511,7 +944,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cameraX -= deltaX;
     this.cameraY -= deltaY;
 
-    // Clamp camera to map bounds
     this.clampCamera();
 
     this.lastMouseX = event.clientX;
@@ -534,7 +966,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       this.zoom = Math.max(this.MIN_ZOOM, this.zoom - this.ZOOM_STEP);
     }
 
-    // Adjust camera to zoom toward mouse position
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
     const mouseX = event.clientX - rect.left;
@@ -551,7 +982,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private clampCamera(): void {
-    // Allow some padding beyond map bounds
     const canvas = this.canvasRef.nativeElement;
     const mapWidth = this.mapMaxX * this.tileSize;
     const mapHeight = this.mapMaxY * this.tileSize;
@@ -565,7 +995,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.cameraY = Math.max(minY, Math.min(maxY, this.cameraY));
   }
 
-  // Zoom controls
   zoomIn(): void {
     this.zoom = Math.min(this.MAX_ZOOM, this.zoom + this.ZOOM_STEP);
     this.clampCamera();
@@ -590,6 +1019,10 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.router.navigate(['/lobby']);
   }
 
+  getMyPlayerColor(): string {
+    return getPlayerColor(this.myColorIndex);
+  }
+
   // Selection
   private drawSelection(): void {
     if (!this.selectedTile) return;
@@ -601,25 +1034,19 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(screenX + 1, screenY + 1, this.tileSize - 2, this.tileSize - 2);
 
-    // Draw corner markers
     const markerSize = 6;
     this.ctx.fillStyle = '#00d9ff';
-    // Top-left
     this.ctx.fillRect(screenX, screenY, markerSize, 3);
     this.ctx.fillRect(screenX, screenY, 3, markerSize);
-    // Top-right
     this.ctx.fillRect(screenX + this.tileSize - markerSize, screenY, markerSize, 3);
     this.ctx.fillRect(screenX + this.tileSize - 3, screenY, 3, markerSize);
-    // Bottom-left
     this.ctx.fillRect(screenX, screenY + this.tileSize - 3, markerSize, 3);
     this.ctx.fillRect(screenX, screenY + this.tileSize - markerSize, 3, markerSize);
-    // Bottom-right
     this.ctx.fillRect(screenX + this.tileSize - markerSize, screenY + this.tileSize - 3, markerSize, 3);
     this.ctx.fillRect(screenX + this.tileSize - 3, screenY + this.tileSize - markerSize, 3, markerSize);
   }
 
   onCanvasClick(event: MouseEvent): void {
-    // Don't select if we were dragging
     if (this.hasDragged) return;
 
     const canvas = this.canvasRef.nativeElement;
@@ -627,10 +1054,27 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
 
-    // Convert to tile coordinates
     const tileX = Math.floor((this.cameraX + mouseX) / this.tileSize);
     const tileY = Math.floor((this.cameraY + mouseY) / this.tileSize);
 
+    // Handle placement mode
+    if (this.placementMode) {
+      const tile = this.tiles.get(`${tileX},${tileY}`);
+      if (tile && this.canPlaceBuilding(tile, this.placementMode)) {
+        // Send place building command
+        this.socketService.sendCommand('GAME', 'PLACE_BUILDING', {
+          x: tileX,
+          y: tileY,
+          buildingType: this.placementMode.id
+        });
+        this.cancelPlacementMode();
+      } else {
+        this.showError('Cannot place building here');
+      }
+      return;
+    }
+
+    // Normal selection
     const tile = this.tiles.get(`${tileX},${tileY}`);
     if (tile) {
       this.selectedTile = tile;
@@ -640,11 +1084,25 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  // Building placement
+  onBuildingSelected(building: BuildingDefinition): void {
+    this.placementMode = building;
+    this.selectedTile = null;
+    this.selectedTileX = -1;
+    this.selectedTileY = -1;
+  }
+
+  cancelPlacementMode(): void {
+    this.placementMode = null;
+    this.hoverTileX = -1;
+    this.hoverTileY = -1;
+    this.render();
+  }
+
   // Action Panel Handler
   onActionTriggered(action: string): void {
     console.log('Action triggered:', action);
     if (action === 'createTurret') {
-      // TODO: Implement create turret logic
       if (this.selectedTile) {
         console.log('Creating turret at', this.selectedTile.x, this.selectedTile.y);
       }

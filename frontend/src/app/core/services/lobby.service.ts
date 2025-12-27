@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { SocketService } from './socket.service';
-import { Lobby, CreateLobbyRequest, ClientSocketSubject, SocketTopic, ServerSocketSubject } from '../../shared/models';
+import { Lobby, LobbyPlayer, CreateLobbyRequest, ClientSocketSubject, SocketTopic, ServerSocketSubject } from '../../shared/models';
 
 @Injectable({
   providedIn: 'root'
@@ -8,10 +8,12 @@ import { Lobby, CreateLobbyRequest, ClientSocketSubject, SocketTopic, ServerSock
 export class LobbyService {
   private lobbies = signal<Lobby[]>([]);
   private currentLobby = signal<Lobby | null>(null);
+  private lobbyPlayers = signal<LobbyPlayer[]>([]);
   private inGame = signal<boolean>(false);
 
   readonly lobbiesList = this.lobbies.asReadonly();
   readonly activeLobby = this.currentLobby.asReadonly();
+  readonly players = this.lobbyPlayers.asReadonly();
   readonly isInGame = this.inGame.asReadonly();
 
   constructor(private socketService: SocketService) {
@@ -56,6 +58,29 @@ export class LobbyService {
     this.socketService.onCommand(ServerSocketSubject.LOBBY, SocketTopic.GAME_STARTED)
       .subscribe(() => {
         this.inGame.set(true);
+      });
+
+    // Listen for lobby state updates
+    this.socketService.onCommand(ServerSocketSubject.LOBBY, 'LOBBY_STATE')
+      .subscribe(cmd => {
+        const players: LobbyPlayer[] = (cmd.data['players'] || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          colorIndex: p.colorIndex,
+          ready: p.ready
+        }));
+        this.lobbyPlayers.set(players);
+
+        // Update lobby with additional info
+        const currentLobby = this.currentLobby();
+        if (currentLobby) {
+          this.currentLobby.set({
+            ...currentLobby,
+            hostId: cmd.data['hostId'],
+            players: players,
+            allReady: cmd.data['allReady']
+          });
+        }
       });
   }
 
@@ -102,11 +127,20 @@ export class LobbyService {
 
   leaveLobby(): void {
     this.currentLobby.set(null);
+    this.lobbyPlayers.set([]);
     this.inGame.set(false);
   }
 
   leaveGame(): void {
     this.socketService.sendCommand(ClientSocketSubject.GAME, SocketTopic.LEAVE_GAME);
     this.leaveLobby();
+  }
+
+  changeColor(colorIndex: number): void {
+    this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'CHANGE_COLOR', { colorIndex });
+  }
+
+  toggleReady(): void {
+    this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'TOGGLE_READY', {});
   }
 }

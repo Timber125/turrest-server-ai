@@ -1,4 +1,4 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -310,8 +310,9 @@ import { ChatComponent } from '../../../shared/components/chat/chat.component';
     }
   `]
 })
-export class LobbyListComponent implements OnInit {
+export class LobbyListComponent implements OnInit, OnDestroy {
   showCreateDialog = signal(false);
+  private refreshInterval: ReturnType<typeof setInterval> | null = null;
 
   newLobby = {
     game: 'TURREST-mode1',
@@ -336,12 +337,26 @@ export class LobbyListComponent implements OnInit {
     // Subscribe to lobby changes
     this.lobbyService.activeLobby;
 
-    // Refresh lobbies on init
-    setTimeout(() => this.refreshLobbies(), 500);
+    // Refresh lobbies on init, then start auto-refresh interval
+    setTimeout(() => {
+      this.refreshLobbies();
+      // Start auto-refresh every 5 seconds after initial refresh
+      this.refreshInterval = setInterval(() => this.refreshLobbies(), 5000);
+    }, 1000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+      this.refreshInterval = null;
+    }
   }
 
   refreshLobbies(): void {
-    this.lobbyService.refreshLobbies();
+    // Only refresh if socket is connected
+    if (this.socketService.state() === 'connected') {
+      this.lobbyService.refreshLobbies();
+    }
   }
 
   createLobby(): void {

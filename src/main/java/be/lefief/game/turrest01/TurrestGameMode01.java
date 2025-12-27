@@ -1,24 +1,31 @@
 package be.lefief.game.turrest01;
 
 import be.lefief.game.Game;
-import be.lefief.game.Player;
 import be.lefief.game.map.GameMap;
-import be.lefief.game.map.TerrainType;
+import be.lefief.game.map.LevelLoader;
 import be.lefief.game.map.Tile;
+import be.lefief.game.turrest01.commands.FullMapResponse;
+import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
+import be.lefief.game.turrest01.commands.TileUpdateResponse;
+import be.lefief.game.turrest01.map.RoadGenerator;
+import be.lefief.game.turrest01.resource.PlayerResources;
+import be.lefief.game.turrest01.structure.Road;
 import be.lefief.sockets.ClientSession;
-import be.lefief.sockets.commands.client.reception.TileChangedResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.awt.Point;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Random;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class TurrestGameMode01 extends Game {
+public class TurrestGameMode01 extends Game<Turrest01Player> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TurrestGameMode01.class);
     private static final String LEVEL_PATH = "levels/0001.level";
@@ -27,11 +34,15 @@ public class TurrestGameMode01 extends Game {
     private GameMap gameMap;
     private ScheduledExecutorService gameLoop;
     private boolean running;
-    private final Random random = new Random();
     private int tickCount = 0;
 
-    public TurrestGameMode01(List<ClientSession> players, UUID lobbyHostId) {
-        super(players, lobbyHostId);
+    public TurrestGameMode01(List<ClientSession> players, UUID lobbyHostId, Map<UUID, Integer> playerColorMap) {
+        super(players, lobbyHostId, playerColorMap);
+    }
+
+    @Override
+    protected Turrest01Player createPlayer(ClientSession session, int playerNumber, UUID gameId, int colorIndex) {
+        return new Turrest01Player(session, playerNumber, gameId, colorIndex);
     }
 
     @Override
@@ -42,13 +53,20 @@ public class TurrestGameMode01 extends Game {
             // 1. Send countdown to players
             broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.CountdownResponse(5));
 
-            // 2. Load level and create combined map for all players
+            // 2. Load level and generate roads
             int playerCount = getPlayerByNumber().size();
-            gameMap = GameMap.createFromLevel(LEVEL_PATH, playerCount);
-            LOG.info("Created combined map {}x{} for {} players",
-                    gameMap.getWidth(), gameMap.getHeight(), playerCount);
+            LevelLoader level = LevelLoader.load(LEVEL_PATH);
 
-            // 3. Schedule game beginning after 5 seconds
+            // Generate roads from spawners to castle (same for all players)
+            RoadGenerator roadGenerator = new RoadGenerator();
+            Set<Point> roadPositions = roadGenerator.generateRoads(level);
+
+            // 3. Create combined map with roads
+            gameMap = GameMap.createFromLevelWithRoads(LEVEL_PATH, playerCount, roadPositions, Road::new);
+            LOG.info("Created combined map {}x{} for {} players with {} roads per section",
+                    gameMap.getWidth(), gameMap.getHeight(), playerCount, roadPositions.size());
+
+            // 4. Schedule game beginning after 5 seconds
             Executors.newSingleThreadScheduledExecutor().schedule(() -> {
                 if (isGameIsRunning()) {
                     LOG.info("Countdown finished, sending map and starting game loop");
@@ -63,38 +81,67 @@ public class TurrestGameMode01 extends Game {
     }
 
     @Override
-    protected void resyncPlayer(Player player) {
+    protected void resyncPlayer(Turrest01Player player) {
         if (gameMap == null || player.getClientSession() == null)
             return;
         LOG.info("Resyncing player {}", player.getPlayerNumber());
 
-        // Send full map
-        // Optimization TODO: Send in bulk command instead of individual tile updates
+        // Send full map with structure data
         for (int x = 0; x < gameMap.getWidth(); x++) {
             for (int y = 0; y < gameMap.getHeight(); y++) {
                 Tile tile = gameMap.getTile(x, y);
                 if (tile != null) {
-                    TileChangedResponse tileUpdate = new TileChangedResponse(
-                            x, y, tile.getTerrainType().getTerrainTypeID());
-                    player.getClientSession().sendCommand(tileUpdate);
+                    player.getClientSession().sendCommand(new TileUpdateResponse(x, y, tile));
                 }
             }
         }
+
+        // Send current resources - no instanceof needed!
+        PlayerResources resources = player.getResources();
+        player.getClientSession().sendCommand(new ResourceUpdateResponse(
+                resources.getWood(),
+                resources.getStone(),
+                resources.getGold()
+        ));
     }
 
     private void sendInitialMapToPlayers() {
         LOG.info("Sending initial map to all players");
-        for (int x = 0; x < gameMap.getWidth(); x++) {
-            for (int y = 0; y < gameMap.getHeight(); y++) {
-                Tile tile = gameMap.getTile(x, y);
-                if (tile != null) {
-                    TileChangedResponse tileUpdate = new TileChangedResponse(
-                            x, y, tile.getTerrainType().getTerrainTypeID());
-                    broadcastToAllPlayers(tileUpdate);
-                }
+
+        // First, send player info to each player so they know their number and color
+        for (Turrest01Player player : getPlayerByNumber().values()) {
+            if (player.isConnected()) {
+                player.getClientSession().sendCommand(
+                        new be.lefief.game.turrest01.commands.PlayerInfoResponse(player.getPlayerNumber(), player.getColorIndex()));
             }
         }
-        LOG.info("Finished sending {} tiles to players", gameMap.getWidth() * gameMap.getHeight());
+
+        // Build playerNumber -> colorIndex mapping for contour rendering
+        Map<Integer, Integer> playerColorMap = new HashMap<>();
+        for (Turrest01Player player : getPlayerByNumber().values()) {
+            playerColorMap.put(player.getPlayerNumber(), player.getColorIndex());
+        }
+
+        // Send entire map in one command (much faster than tile-by-tile)
+        broadcastToAllPlayers(new FullMapResponse(gameMap, playerColorMap));
+        LOG.info("Sent full map ({}x{}) to all players in single command",
+                gameMap.getWidth(), gameMap.getHeight());
+
+        // Send initial resources to each player
+        for (Turrest01Player player : getPlayerByNumber().values()) {
+            if (player.isConnected()) {
+                PlayerResources resources = player.getResources();
+                player.getClientSession().sendCommand(new ResourceUpdateResponse(
+                        resources.getWood(),
+                        resources.getStone(),
+                        resources.getGold()
+                ));
+            }
+        }
+    }
+
+    public GameMap getGameMap() {
+        return gameMap;
     }
 
     private void startGameLoop() {
@@ -111,17 +158,18 @@ public class TurrestGameMode01 extends Game {
         try {
             tickCount++;
 
-            // Example game logic: randomly change a few tiles each tick
-            int tilesToChange = random.nextInt(3) + 1; // 1-3 tiles per tick
-            for (int i = 0; i < tilesToChange; i++) {
-                int x = random.nextInt(gameMap.getWidth());
-                int y = random.nextInt(gameMap.getHeight());
-                TerrainType newTerrain = getRandomTerrain();
+            // Process resource production for each player - no instanceof needed!
+            for (Turrest01Player player : getPlayerByNumber().values()) {
+                if (player.isConnected()) {
+                    PlayerResources resources = player.getResources();
+                    resources.addProduction();
 
-                Tile tile = gameMap.getTile(x, y);
-                if (tile != null && tile.getTerrainType() != newTerrain) {
-                    tile.setTerrainType(newTerrain);
-                    broadcastToAllPlayers(new TileChangedResponse(x, y, newTerrain.getTerrainTypeID()));
+                    // Send resource update to the player
+                    player.getClientSession().sendCommand(new ResourceUpdateResponse(
+                            resources.getWood(),
+                            resources.getStone(),
+                            resources.getGold()
+                    ));
                 }
             }
 
@@ -131,11 +179,6 @@ public class TurrestGameMode01 extends Game {
         } catch (Exception e) {
             LOG.error("Error in game tick", e);
         }
-    }
-
-    private TerrainType getRandomTerrain() {
-        TerrainType[] types = TerrainType.values();
-        return types[random.nextInt(types.length)];
     }
 
     @Override
@@ -152,6 +195,7 @@ public class TurrestGameMode01 extends Game {
                 gameLoop.shutdownNow();
             }
         }
+        shutdownCommunicationPool();
         LOG.info("Game loop stopped after {} ticks", tickCount);
     }
 }

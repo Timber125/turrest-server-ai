@@ -1,9 +1,6 @@
 package be.lefief.lobby;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class Lobby {
@@ -11,18 +8,21 @@ public class Lobby {
     private static final int SERVERSIDE_MAX_PLAYERS = 8;
 
     private boolean open;
-    private final UUID[] players;
+    private final List<LobbyPlayer> players;
     private final int maxplayers;
     private final boolean hidden;
     private final String game;
     private boolean started;
+    private final UUID hostId;
 
-    public Lobby(UUID host, int maxPlayers, boolean hidden, String game) {
-        players = new UUID[SERVERSIDE_MAX_PLAYERS];
+    public Lobby(UUID host, String hostName, int maxPlayers, boolean hidden, String game) {
+        players = new ArrayList<>();
         this.maxplayers = maxPlayers;
         this.game = game;
         this.hidden = hidden;
-        players[0] = host;
+        this.hostId = host;
+        // Host gets color 0
+        players.add(new LobbyPlayer(host, hostName, 0));
         open = maxPlayers > 1;
     }
 
@@ -31,7 +31,7 @@ public class Lobby {
     }
 
     public UUID getHost() {
-        return players[0];
+        return hostId;
     }
 
     public boolean isHidden() {
@@ -39,8 +39,7 @@ public class Lobby {
     }
 
     public UUID getLobbyID() {
-        // currently same as playerid
-        return players[0];
+        return hostId;
     }
 
     public String getGame() {
@@ -51,59 +50,98 @@ public class Lobby {
         return maxplayers;
     }
 
-    public boolean addClient(UUID clientId) {
+    public boolean addClient(UUID clientId, String clientName) {
         if (!isOpen()) return false;
-        for (int i = 1; i < players.length; i++) {
-            if (players[i] == null) {
-                players[i] = clientId;
-                checkIfOpen();
-                return true;
+        if (players.size() >= SERVERSIDE_MAX_PLAYERS) return false;
+        if (players.size() >= maxplayers) return false;
+        if (getPlayer(clientId) != null) return false;
+
+        // Assign first available color
+        int colorIndex = findNextAvailableColor();
+        players.add(new LobbyPlayer(clientId, clientName, colorIndex));
+        checkIfOpen();
+        return true;
+    }
+
+    private int findNextAvailableColor() {
+        Set<Integer> usedColors = players.stream()
+                .map(LobbyPlayer::getColorIndex)
+                .collect(Collectors.toSet());
+        for (int i = 0; i < 16; i++) {
+            if (!usedColors.contains(i)) {
+                return i;
             }
         }
-        return false;
+        return 0; // Fallback
     }
 
     private void checkIfOpen() {
-        for (int i = 0; i < maxplayers; i++) {
-            if (players[i] == null) {
-                this.open = true;
-                return;
-            }
-        }
-        open = false;
+        open = players.size() < maxplayers;
     }
 
     public boolean removeClient(UUID clientId) {
-        if (clientId == players[0]) return destroyLobby("Host left the lobby");
-        for (int i = 1; i < players.length; i++) {
-            if (players[i] == clientId) {
-                players[i] = null;
-                open = true;
-                return true;
-            }
+        if (clientId.equals(hostId)) {
+            return destroyLobby("Host left the lobby");
         }
-        return false;
+        boolean removed = players.removeIf(p -> p.getId().equals(clientId));
+        if (removed) {
+            open = true;
+        }
+        return removed;
     }
 
     private boolean destroyLobby(String reason) {
         open = false;
-        for (int i = 0; i < players.length; i++) {
-            if (players[i] != null) {
-                kick(i, players[i], reason);
-            }
-        }
+        players.clear();
         return true;
     }
 
-    private void kick(int playerNumber, UUID player, String reason) {
-        // ?
-        players[playerNumber] = null;
+    public List<UUID> getPlayerIds() {
+        return players.stream()
+                .map(LobbyPlayer::getId)
+                .collect(Collectors.toList());
     }
 
-    public List<UUID> getPlayers() {
-        return Arrays.stream(players)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+    public List<LobbyPlayer> getPlayers() {
+        return new ArrayList<>(players);
+    }
+
+    public LobbyPlayer getPlayer(UUID playerId) {
+        return players.stream()
+                .filter(p -> p.getId().equals(playerId))
+                .findFirst()
+                .orElse(null);
+    }
+
+    public boolean isColorTaken(int colorIndex, UUID excludePlayerId) {
+        return players.stream()
+                .filter(p -> !p.getId().equals(excludePlayerId))
+                .anyMatch(p -> p.getColorIndex() == colorIndex);
+    }
+
+    public boolean changePlayerColor(UUID playerId, int newColorIndex) {
+        if (isColorTaken(newColorIndex, playerId)) {
+            return false;
+        }
+        LobbyPlayer player = getPlayer(playerId);
+        if (player == null || player.isReady()) {
+            return false;
+        }
+        player.setColorIndex(newColorIndex);
+        return true;
+    }
+
+    public boolean togglePlayerReady(UUID playerId) {
+        LobbyPlayer player = getPlayer(playerId);
+        if (player == null) {
+            return false;
+        }
+        player.setReady(!player.isReady());
+        return true;
+    }
+
+    public boolean allPlayersReady() {
+        return players.stream().allMatch(LobbyPlayer::isReady);
     }
 
     public boolean isStarted() {

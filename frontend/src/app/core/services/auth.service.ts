@@ -10,9 +10,11 @@ export class AuthService {
   private readonly API_URL = 'http://localhost:8081';
 
   private currentUser = signal<User | null>(null);
+  private sessionInvalidated = signal(false);
 
   readonly user = this.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
+  readonly isSessionInvalidated = this.sessionInvalidated.asReadonly();
 
   constructor(private http: HttpClient) {
     this.loadStoredUser();
@@ -43,6 +45,7 @@ export class AuthService {
           token: response.accessToken
         };
         this.storeUser(user);
+        this.clearSessionInvalidated();
       })
     );
   }
@@ -63,6 +66,14 @@ export class AuthService {
   logout(): void {
     localStorage.removeItem('user');
     this.currentUser.set(null);
+  }
+
+  markSessionInvalidated(): void {
+    this.sessionInvalidated.set(true);
+  }
+
+  clearSessionInvalidated(): void {
+    this.sessionInvalidated.set(false);
   }
 
   refreshToken(): Observable<AuthResponse> {

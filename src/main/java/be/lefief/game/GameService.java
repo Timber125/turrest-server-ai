@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class GameService {
 
     private static final Logger LOG = LoggerFactory.getLogger(GameService.class);
-    private final Map<UUID, Game> games;
+    private final Map<UUID, Game<?>> games;
     private final Map<String, UUID> playerActiveGame;
     private final LobbyService lobbyService;
 
@@ -26,15 +26,15 @@ public class GameService {
         playerActiveGame = new ConcurrentHashMap<>();
     }
 
-    public Game startGame(String gameType, List<ClientSession> lobbyPlayers, UUID lobbyHostId) {
+    public Game<?> startGame(String gameType, List<ClientSession> lobbyPlayers, UUID lobbyHostId, Map<UUID, Integer> playerColorMap) {
         LOG.info("Starting game of type '{}' with {} players", gameType, lobbyPlayers.size());
 
-        Game game;
+        Game<?> game;
         if ("TURREST-mode1".equals(gameType)) {
-            game = new TurrestGameMode01(lobbyPlayers, lobbyHostId);
+            game = new TurrestGameMode01(lobbyPlayers, lobbyHostId, playerColorMap);
         } else {
             LOG.warn("Unknown game type '{}', defaulting to TURREST-mode1", gameType);
-            game = new TurrestGameMode01(lobbyPlayers, lobbyHostId);
+            game = new TurrestGameMode01(lobbyPlayers, lobbyHostId, playerColorMap);
         }
 
         games.put(game.getGameID(), game);
@@ -53,8 +53,19 @@ public class GameService {
         return game;
     }
 
-    public Game getGame(UUID gameId) {
+    public Game<?> getGame(UUID gameId) {
         return games.get(gameId);
+    }
+
+    /**
+     * Gets the game a player is currently in by their session key.
+     */
+    public Game<?> getGameBySessionKey(String sessionKey) {
+        UUID gameId = playerActiveGame.get(sessionKey);
+        if (gameId != null) {
+            return games.get(gameId);
+        }
+        return null;
     }
 
     public boolean isPlayerInGame(String sessionKey) {
@@ -64,7 +75,7 @@ public class GameService {
     public void handlePlayerDisconnect(String sessionKey, UUID userId) {
         UUID gameId = playerActiveGame.get(sessionKey);
         if (gameId != null) {
-            Game game = games.get(gameId);
+            Game<?> game = games.get(gameId);
             if (game != null) {
                 game.handlePlayerDisconnect(userId);
             }
@@ -74,7 +85,7 @@ public class GameService {
     public void reconnectPlayer(String sessionKey, ClientSession newSession) {
         UUID gameId = playerActiveGame.get(sessionKey);
         if (gameId != null) {
-            Game game = games.get(gameId);
+            Game<?> game = games.get(gameId);
             if (game != null) {
                 LOG.info(" reconnecting session {} to game {}", sessionKey, gameId);
                 game.reconnectPlayer(newSession.getClientID(), newSession);
@@ -90,7 +101,7 @@ public class GameService {
     }
 
     public void cleanupGame(UUID gameId) {
-        Game game = games.remove(gameId);
+        Game<?> game = games.remove(gameId);
         if (game != null) {
             if (game.getLobbyHostId() != null) {
                 lobbyService.removeLobby(game.getLobbyHostId());

@@ -30,12 +30,19 @@ public class FakeKeycloak {
     }
     public boolean useAccessToken(String accessToken, UUID clientId){
         if(clientId == null) return false;
+        // Validate token without removing - tokens expire after 4 hours
         if(accessTokenMap.containsKey(accessToken) && accessTokenMap.get(accessToken).toString().equals(clientId.toString())) {
-            accessTokenMap.remove(accessToken);
             return true;
         } else {
             return false;
         }
+    }
+
+    /**
+     * Invalidate a token (e.g., on logout).
+     */
+    public void invalidateToken(String accessToken) {
+        accessTokenMap.remove(accessToken);
     }
 
 }

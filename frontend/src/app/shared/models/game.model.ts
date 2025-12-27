@@ -9,17 +9,63 @@ export enum TerrainType {
   SPAWNER = 8
 }
 
+export enum StructureType {
+  ROAD = 0,
+  BUILDING = 1
+}
+
 export interface Tile {
   x: number;
   y: number;
   terrainType: TerrainType;
-  building?: Building;
+  structureType?: StructureType;
+  buildingType?: number;
+  ownerPlayerNumber?: number;  // For buildings
+  owners?: number[];           // Players who can build here
 }
 
 export interface Building {
   name: string;
   type: number;
 }
+
+export interface PlayerResources {
+  wood: number;
+  stone: number;
+  gold: number;
+}
+
+export interface BuildingDefinition {
+  id: number;
+  name: string;
+  icon: string;
+  cost: { wood: number; stone: number; gold: number };
+  allowedTerrains: TerrainType[];
+}
+
+export const BUILDING_DEFINITIONS: BuildingDefinition[] = [
+  {
+    id: 1,
+    name: 'Lumbercamp',
+    icon: '🪓',
+    cost: { wood: 50, stone: 10, gold: 10 },
+    allowedTerrains: [TerrainType.FOREST]
+  },
+  {
+    id: 2,
+    name: 'Stone Quarry',
+    icon: '⛏️',
+    cost: { wood: 10, stone: 50, gold: 10 },
+    allowedTerrains: [TerrainType.ROCKY]
+  },
+  {
+    id: 3,
+    name: 'Gold Mine',
+    icon: '⚒️',
+    cost: { wood: 10, stone: 10, gold: 50 },
+    allowedTerrains: [TerrainType.DIRT]
+  }
+];
 
 export interface GameState {
   gameId: string;

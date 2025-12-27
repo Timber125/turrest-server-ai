@@ -153,6 +153,14 @@
                     <driver>org.h2.Driver</driver>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${springboot.version}</version>
+                <configuration>
+                    <mainClass>be.lefief.Main</mainClass>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
