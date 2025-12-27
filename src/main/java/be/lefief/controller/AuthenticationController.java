@@ -24,30 +24,41 @@ public class AuthenticationController {
 
     public AuthenticationController(
             UserProfileService userProfileService,
-            FakeKeycloak fakeKeycloak
-    ) {
+            FakeKeycloak fakeKeycloak) {
         this.userProfileService = userProfileService;
         this.fakeKeycloak = fakeKeycloak;
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthenticationSuccessDTO> login(
-            @RequestBody AuthenticationDTO authenticationDTO
-    ) {
-        Optional<UserData> authenticatedUser = userProfileService.login(authenticationDTO.username(), authenticationDTO.password());
-        if (authenticatedUser.isEmpty()) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            @RequestBody AuthenticationDTO authenticationDTO) {
+        Optional<UserData> authenticatedUser = userProfileService.login(authenticationDTO.username(),
+                authenticationDTO.password());
+        if (authenticatedUser.isEmpty())
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         UserData user = authenticatedUser.get();
-        return ResponseEntity.ok(new AuthenticationSuccessDTO(user.getName(), user.getId(), fakeKeycloak.createAccessToken(user.getId())));
+        return ResponseEntity.ok(new AuthenticationSuccessDTO(user.getName(), user.getId(),
+                fakeKeycloak.createAccessToken(user.getId())));
     }
 
     @PostMapping("/register")
     public ResponseEntity<AuthenticationSuccessDTO> register(
-            @RequestBody AuthenticationDTO authenticationDTO
-    ) {
+            @RequestBody AuthenticationDTO authenticationDTO) {
         Optional<UserData> registeredUser = userProfileService.save(authenticationDTO);
-        if(registeredUser.isEmpty()) return ResponseEntity.badRequest().build();
+        if (registeredUser.isEmpty())
+            return ResponseEntity.badRequest().build();
         UserData user = registeredUser.get();
-        return ResponseEntity.ok(new AuthenticationSuccessDTO(user.getName(), user.getId(), fakeKeycloak.createAccessToken(user.getId())));
+        return ResponseEntity.ok(new AuthenticationSuccessDTO(user.getName(), user.getId(),
+                fakeKeycloak.createAccessToken(user.getId())));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthenticationSuccessDTO> refresh(
+            @RequestBody be.lefief.controller.dto.RefreshRequestDTO refreshRequest) {
+        Optional<UserData> user = userProfileService.findByID(refreshRequest.userId());
+        if (user.isEmpty())
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        return ResponseEntity.ok(new AuthenticationSuccessDTO(user.get().getName(), user.get().getId(),
+                fakeKeycloak.createAccessToken(user.get().getId())));
+    }
 }

@@ -1,5 +1,6 @@
 package be.lefief.sockets;
 
+import be.lefief.game.GameService;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.sockets.handlers.routing.CommandRouter;
 import be.lefief.util.CommandSerializer;
@@ -17,7 +18,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Handles WebSocket connections and bridges them to the existing command protocol.
+ * Handles WebSocket connections and bridges them to the existing command
+ * protocol.
  */
 @Component
 public class WebSocketConnectionHandler extends TextWebSocketHandler {
@@ -25,10 +27,12 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
     private static final Logger LOG = LoggerFactory.getLogger(WebSocketConnectionHandler.class);
 
     private final CommandRouter commandRouter;
+    private final GameService gameService;
     private final Map<String, WebSocketClientSession> sessions = new ConcurrentHashMap<>();
 
-    public WebSocketConnectionHandler(CommandRouter commandRouter) {
+    public WebSocketConnectionHandler(CommandRouter commandRouter, GameService gameService) {
         this.commandRouter = commandRouter;
+        this.gameService = gameService;
     }
 
     @Override
@@ -53,8 +57,13 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
 
         // Set up close handler
         clientSession.setOnClose(() -> {
-            LOG.info("WebSocket client {} disconnected", clientSession.getClientID());
+            UUID clientId = clientSession.getClientID();
+            String tabId = clientSession.getTabId();
+            LOG.info("WebSocket client {} (tab {}) disconnected", clientId, tabId);
             sessions.remove(session.getId());
+            if (clientId != null) {
+                gameService.handlePlayerDisconnect(clientId + ":" + tabId, clientId);
+            }
         });
     }
 

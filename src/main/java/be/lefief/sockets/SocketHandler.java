@@ -32,19 +32,22 @@ public class SocketHandler implements ClientSession {
     private final ConcurrentLinkedQueue<ServerToClientCommand> outgoingMessageQueue;
     private final ExecutorService threadPoolExecutor;
     private Supplier<UserData> userDataSupplier;
+    private final TimerTask authTimeoutTask;
 
     public SocketHandler(Socket socket) {
         this.clientSocket = socket;
         this.outgoingMessageQueue = new ConcurrentLinkedQueue<>();
         this.threadPoolExecutor = Executors.newFixedThreadPool(1);
-        ServerClock.TIMER.schedule(new TimerTask() {
+        this.authTimeoutTask = new TimerTask() {
             @Override
             public void run() {
-                if(userDataSupplier == null) {
-                    sendMessage(CommandSerializer.serialize(new DisplayChatCommand("did not receive login information in time, please retry")));
+                if (userDataSupplier == null) {
+                    sendMessage(CommandSerializer.serialize(
+                            new DisplayChatCommand("did not receive login information in time, please retry")));
                 }
             }
-        }, 3000L);
+        };
+        ServerClock.TIMER.schedule(authTimeoutTask, 10000L);
         try {
             // Create input and output streams for communication
             out = new PrintWriter(clientSocket.getOutputStream(), true);
@@ -65,7 +68,7 @@ public class SocketHandler implements ClientSession {
             close();
         } catch (IOException e) {
             LOG.error("Client {} disconnected", getClientID());
-            close(); //?
+            close(); // ?
         }
     }
 
@@ -75,12 +78,13 @@ public class SocketHandler implements ClientSession {
     }
 
     @Override
-    public void sendCommand(ServerToClientCommand serverToClientCommand){
+    public void sendCommand(ServerToClientCommand serverToClientCommand) {
         final String cmd = CommandSerializer.serialize(serverToClientCommand);
         threadPoolExecutor.submit(() -> sendMessage(cmd));
     }
+
     @Override
-    public void close(){
+    public void close() {
         try {
             in.close();
         } catch (IOException e) {
@@ -95,10 +99,9 @@ public class SocketHandler implements ClientSession {
             LOG.error("Could not close outputstream: " + e.getMessage());
         }
 
-        if(onClose != null)
+        if (onClose != null)
             onClose.run();
     }
-
 
     @Override
     public void setOnClose(Runnable r) {
@@ -131,7 +134,7 @@ public class SocketHandler implements ClientSession {
         this.onMessage = stringConsumer;
     }
 
-    public Consumer<String> getOnMessage(){
+    public Consumer<String> getOnMessage() {
         return onMessage;
     }
 
@@ -141,22 +144,38 @@ public class SocketHandler implements ClientSession {
     }
 
     @Override
-    public String getUserIdentifiedClientName(){
+    public String getUserIdentifiedClientName() {
         return String.format("%s(%s)", getClientName(), "#" + getClientID().toString().substring(0, 4));
     }
 
     @Override
     public void authenticate(UserProfileService userProfileService, UUID clientId) {
-        userDataSupplier = () -> userProfileService.findByID(clientId).orElseThrow(() -> new EntityNotFoundException("User not found"));
+        if (authTimeoutTask != null) {
+            authTimeoutTask.cancel();
+        }
+        userDataSupplier = () -> userProfileService.findByID(clientId)
+                .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
     @Override
-    public UserData getUserData(){
+    public UserData getUserData() {
         return (userDataSupplier == null) ? null : userDataSupplier.get();
     }
 
     @Override
     public String getRemoteAddress() {
         return clientSocket.getInetAddress().toString();
+    }
+
+    private String tabId;
+
+    @Override
+    public String getTabId() {
+        return tabId;
+    }
+
+    @Override
+    public void setTabId(String tabId) {
+        this.tabId = tabId;
     }
 }

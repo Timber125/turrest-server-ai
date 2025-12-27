@@ -1,6 +1,7 @@
 package be.lefief.game.turrest01;
 
 import be.lefief.game.Game;
+import be.lefief.game.Player;
 import be.lefief.game.map.GameMap;
 import be.lefief.game.map.TerrainType;
 import be.lefief.game.map.Tile;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,28 +30,55 @@ public class TurrestGameMode01 extends Game {
     private final Random random = new Random();
     private int tickCount = 0;
 
-    public TurrestGameMode01(List<ClientSession> players) {
-        super(players);
+    public TurrestGameMode01(List<ClientSession> players, UUID lobbyHostId) {
+        super(players, lobbyHostId);
     }
 
     @Override
     public void start() {
-        LOG.info("Starting TurrestGameMode01 for {} players", getPlayerByNumber().size());
+        LOG.info("Starting TurrestGameMode01 for {} players with 5s countdown", getPlayerByNumber().size());
 
         try {
-            // 1. Load level and create combined map for all players
+            // 1. Send countdown to players
+            broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.CountdownResponse(5));
+
+            // 2. Load level and create combined map for all players
             int playerCount = getPlayerByNumber().size();
             gameMap = GameMap.createFromLevel(LEVEL_PATH, playerCount);
             LOG.info("Created combined map {}x{} for {} players",
                     gameMap.getWidth(), gameMap.getHeight(), playerCount);
 
-            // 2. Send all tiles to players
-            sendInitialMapToPlayers();
+            // 3. Schedule game beginning after 5 seconds
+            Executors.newSingleThreadScheduledExecutor().schedule(() -> {
+                if (isGameIsRunning()) {
+                    LOG.info("Countdown finished, sending map and starting game loop");
+                    sendInitialMapToPlayers();
+                    startGameLoop();
+                }
+            }, 5, TimeUnit.SECONDS);
 
-            // 3. Start game loop
-            startGameLoop();
         } catch (IOException e) {
             LOG.error("Failed to load level: {}", LEVEL_PATH, e);
+        }
+    }
+
+    @Override
+    protected void resyncPlayer(Player player) {
+        if (gameMap == null || player.getClientSession() == null)
+            return;
+        LOG.info("Resyncing player {}", player.getPlayerNumber());
+
+        // Send full map
+        // Optimization TODO: Send in bulk command instead of individual tile updates
+        for (int x = 0; x < gameMap.getWidth(); x++) {
+            for (int y = 0; y < gameMap.getHeight(); y++) {
+                Tile tile = gameMap.getTile(x, y);
+                if (tile != null) {
+                    TileChangedResponse tileUpdate = new TileChangedResponse(
+                            x, y, tile.getTerrainType().getTerrainTypeID());
+                    player.getClientSession().sendCommand(tileUpdate);
+                }
+            }
         }
     }
 
@@ -60,8 +89,7 @@ public class TurrestGameMode01 extends Game {
                 Tile tile = gameMap.getTile(x, y);
                 if (tile != null) {
                     TileChangedResponse tileUpdate = new TileChangedResponse(
-                        x, y, tile.getTerrainType().getTerrainTypeID()
-                    );
+                            x, y, tile.getTerrainType().getTerrainTypeID());
                     broadcastToAllPlayers(tileUpdate);
                 }
             }
@@ -77,7 +105,8 @@ public class TurrestGameMode01 extends Game {
     }
 
     private void gameTick() {
-        if (!running || gameMap == null) return;
+        if (!running || gameMap == null || !isGameIsRunning())
+            return;
 
         try {
             tickCount++;
@@ -109,8 +138,10 @@ public class TurrestGameMode01 extends Game {
         return types[random.nextInt(types.length)];
     }
 
+    @Override
     public void stop() {
         running = false;
+        setGameIsRunning(false);
         if (gameLoop != null) {
             gameLoop.shutdown();
             try {

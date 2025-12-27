@@ -23,22 +23,28 @@ import java.util.*;
 public class LobbyService implements SocketConnectionAcceptor {
 
     private static final Logger LOG = LoggerFactory.getLogger(LobbyService.class);
-    private final Map<UUID, ClientSession> identifiedClients;
+    private final Map<String, ClientSession> identifiedClients;
     private final List<ClientSession> unidentifiedClients;
     private final Map<UUID, Lobby> lobbyHosts;
+
     public LobbyService() {
         this.lobbyHosts = new HashMap<>();
         this.identifiedClients = new HashMap<>();
         this.unidentifiedClients = new ArrayList<>();
     }
 
-    public Lobby getLobby(UUID lobbyID){
+    public Lobby getLobby(UUID lobbyID) {
         return lobbyHosts.get(lobbyID);
+    }
+
+    private String getSessionKey(UUID userId, String tabId) {
+        return userId + ":" + (tabId != null ? tabId : "default");
     }
 
     public boolean createLobby(SecuredClientToServerCommand<CreateLobbyCommand> command) {
         UUID hostID = command.getClientId();
-        Lobby proposedLobby = new Lobby(hostID, command.getCommand().getSize(), command.getCommand().isHidden(), command.getCommand().getGame());
+        Lobby proposedLobby = new Lobby(hostID, command.getCommand().getSize(), command.getCommand().isHidden(),
+                command.getCommand().getGame());
         lobbyHosts.values().forEach(lobby -> lobby.getPlayers().remove(hostID));
         lobbyHosts.put(hostID, proposedLobby);
         return true;
@@ -56,7 +62,8 @@ public class LobbyService implements SocketConnectionAcceptor {
 
     private boolean clientIsPartOfLobby(UUID hostId, UUID clientId) {
         Lobby lobby = lobbyHosts.get(hostId);
-        if (lobby == null) return false;
+        if (lobby == null)
+            return false;
         return lobby.getPlayers().contains(clientId);
     }
 
@@ -75,22 +82,24 @@ public class LobbyService implements SocketConnectionAcceptor {
     }
 
     public void handleLogin(UUID userId, ClientSession clientSession) {
-        identifiedClients.put(userId, clientSession);
+        identifiedClients.put(getSessionKey(userId, clientSession.getTabId()), clientSession);
         unidentifiedClients.remove(clientSession);
-        emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(), clientSession.getClientName() + " Logged in."));
+        emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(),
+                clientSession.getClientName() + " Logged in."));
     }
 
     private Runnable onClose(ClientSession clientSession) {
         return () -> {
             unidentifiedClients.remove(clientSession);
             UUID clientID = clientSession.getClientID();
-            if (clientID == null) {
-                unidentifiedClients.remove(clientSession);
-            } else {
-                ClientSession removed = identifiedClients.remove(clientID);
+            if (clientID != null) {
+                ClientSession removed = identifiedClients.remove(getSessionKey(clientID, clientSession.getTabId()));
                 removeLobbyHostForUser(clientID);
                 removeUserFromAllLobbies(clientID);
-                emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(), removed.getUserIdentifiedClientName() + " Disconnected."));
+                if (removed != null) {
+                    emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(),
+                            removed.getUserIdentifiedClientName() + " Disconnected."));
+                }
             }
         };
     }
@@ -100,7 +109,13 @@ public class LobbyService implements SocketConnectionAcceptor {
     }
 
     public List<Lobby> getLobbies() {
-        return new ArrayList<>(lobbyHosts.values());
+        return lobbyHosts.values().stream()
+                .filter(lobby -> !lobby.isStarted())
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public void removeLobby(UUID hostId) {
+        lobbyHosts.remove(hostId);
     }
 
     @Override
@@ -115,15 +130,23 @@ public class LobbyService implements SocketConnectionAcceptor {
 
     public void emitLobbyMessage(UUID lobbyId, String message) {
         Lobby lobby = lobbyHosts.get(lobbyId);
-        if(lobby != null){
-            lobby.getPlayers().forEach(playerId -> identifiedClients.get(playerId).sendMessage(message));
+        if (lobby != null) {
+            lobby.getPlayers().forEach(playerId -> {
+                identifiedClients.values().stream()
+                        .filter(session -> playerId.equals(session.getClientID()))
+                        .forEach(session -> session.sendMessage(message));
+            });
         }
     }
 
     public void emitLobbyCommand(UUID lobbyId, ServerToClientCommand serverToClientCommand) {
         Lobby lobby = lobbyHosts.get(lobbyId);
-        if(lobby != null){
-            lobby.getPlayers().forEach(playerId -> identifiedClients.get(playerId).sendCommand(serverToClientCommand));
+        if (lobby != null) {
+            lobby.getPlayers().forEach(playerId -> {
+                identifiedClients.values().stream()
+                        .filter(session -> playerId.equals(session.getClientID()))
+                        .forEach(session -> session.sendCommand(serverToClientCommand));
+            });
         }
     }
 
@@ -131,8 +154,8 @@ public class LobbyService implements SocketConnectionAcceptor {
         Lobby lobby = lobbyHosts.get(lobbyId);
         if (lobby != null) {
             return lobby.getPlayers().stream()
-                    .map(identifiedClients::get)
-                    .filter(java.util.Objects::nonNull)
+                    .flatMap(playerId -> identifiedClients.values().stream()
+                            .filter(session -> playerId.equals(session.getClientID())))
                     .collect(java.util.stream.Collectors.toList());
         }
         return new ArrayList<>();

@@ -32,20 +32,23 @@ public class WebSocketClientSession implements ClientSession {
     private Runnable onClose;
     private Consumer<String> onMessage;
     private Supplier<UserData> userDataSupplier;
+    private final TimerTask authTimeoutTask;
 
     public WebSocketClientSession(WebSocketSession session) {
         this.session = session;
         this.threadPoolExecutor = Executors.newFixedThreadPool(1);
 
-        // Timeout for authentication (same as SocketHandler)
-        ServerClock.TIMER.schedule(new TimerTask() {
+        // Timeout for authentication
+        this.authTimeoutTask = new TimerTask() {
             @Override
             public void run() {
                 if (userDataSupplier == null && session.isOpen()) {
-                    sendMessage(CommandSerializer.serialize(new DisplayChatCommand("did not receive login information in time, please retry")));
+                    sendMessage(CommandSerializer.serialize(
+                            new DisplayChatCommand("did not receive login information in time, please retry")));
                 }
             }
-        }, 3000L);
+        };
+        ServerClock.TIMER.schedule(authTimeoutTask, 10000L);
     }
 
     @Override
@@ -84,6 +87,9 @@ public class WebSocketClientSession implements ClientSession {
 
     @Override
     public void authenticate(UserProfileService userProfileService, UUID clientId) {
+        if (authTimeoutTask != null) {
+            authTimeoutTask.cancel();
+        }
         userDataSupplier = () -> userProfileService.findByID(clientId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
@@ -141,5 +147,17 @@ public class WebSocketClientSession implements ClientSession {
 
     public WebSocketSession getSession() {
         return session;
+    }
+
+    private String tabId;
+
+    @Override
+    public String getTabId() {
+        return tabId;
+    }
+
+    @Override
+    public void setTabId(String tabId) {
+        this.tabId = tabId;
     }
 }

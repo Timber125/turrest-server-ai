@@ -8,7 +8,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
- * Abstraction for client connections - supports both TCP sockets and WebSockets.
+ * Abstraction for client connections - supports both TCP sockets and
+ * WebSockets.
  */
 public interface ClientSession {
 
@@ -66,4 +67,8 @@ public interface ClientSession {
      * Get a description of the remote address (for logging).
      */
     String getRemoteAddress();
+
+    String getTabId();
+
+    void setTabId(String tabId);
 }

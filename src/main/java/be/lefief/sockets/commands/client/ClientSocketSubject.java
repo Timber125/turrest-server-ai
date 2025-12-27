@@ -4,5 +4,6 @@ public enum ClientSocketSubject {
     DISPLAY_CHAT,
     SEND_CHAT,
     LOBBY,
-    GAME
+    GAME,
+    CORE
 }

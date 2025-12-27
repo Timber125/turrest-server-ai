@@ -4,12 +4,21 @@ import { Router } from '@angular/router';
 import { LobbyService, SocketService, AuthService } from '../../core/services';
 import { TerrainType, Tile } from '../../shared/models';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
+import { TileInfoComponent } from './components/tile-info/tile-info.component';
+import { ActionPanelComponent } from './components/action-panel/action-panel.component';
+import { MinimapComponent } from './components/minimap/minimap.component';
 import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-game',
   standalone: true,
-  imports: [CommonModule, ChatComponent],
+  imports: [
+    CommonModule,
+    ChatComponent,
+    TileInfoComponent,
+    ActionPanelComponent,
+    MinimapComponent
+  ],
   template: `
     <div class="game-container">
       <header class="game-header">
@@ -38,7 +47,14 @@ import { Subscription } from 'rxjs';
               (wheel)="onWheel($event)"
               (click)="onCanvasClick($event)"
             ></canvas>
-            @if (!hasReceivedTiles) {
+            @if (countdown !== null) {
+              <div class="game-overlay countdown-overlay">
+                <div class="countdown-circle">
+                   <span class="countdown-number">{{ countdown }}</span>
+                </div>
+                <p>Game starting soon...</p>
+              </div>
+            } @else if (!hasReceivedTiles) {
               <div class="game-overlay">
                 <p>Game view - Waiting for map data from server...</p>
                 <p class="hint">The game engine will send tile updates here.</p>
@@ -48,55 +64,32 @@ import { Subscription } from 'rxjs';
 
           <div class="bottom-pane">
             <!-- Left: Selected Tile Info -->
-            <div class="pane-section tile-info">
-              <h4>Selected Tile</h4>
-              @if (selectedTile) {
-                <div class="tile-details">
-                  <p><span class="label">Position:</span> ({{ selectedTile.x }}, {{ selectedTile.y }})</p>
-                  <p><span class="label">Terrain:</span> {{ getTerrainName(selectedTile.terrainType) }}</p>
-                  <div class="terrain-preview" [style.background-color]="getTerrainColor(selectedTile.terrainType)"></div>
-                </div>
-              } @else {
-                <p class="no-selection">Click a tile to select</p>
-              }
-            </div>
+            <app-tile-info
+               class="pane-section-wrapper tile-info" 
+               [selectedTile]="selectedTile">
+            </app-tile-info>
 
             <!-- Center: Actions -->
-            <div class="pane-section actions-pane">
-              <h4>Actions</h4>
-              <div class="action-buttons">
-                <button
-                  class="action-btn"
-                  [disabled]="!selectedTile || !canBuildOnTile(selectedTile)"
-                  (click)="onCreateTurret()"
-                >
-                  <span class="action-icon">🗼</span>
-                  <span>Create Turret</span>
-                </button>
-                <button class="action-btn" [disabled]="!selectedTile">
-                  <span class="action-icon">🏗️</span>
-                  <span>Build Wall</span>
-                </button>
-                <button class="action-btn" [disabled]="!selectedTile">
-                  <span class="action-icon">⛏️</span>
-                  <span>Demolish</span>
-                </button>
-              </div>
-            </div>
+            <app-action-panel
+               class="pane-section-wrapper actions-pane"
+               [selectedTile]="selectedTile"
+               (actionTriggered)="onActionTriggered($event)">
+            </app-action-panel>
 
             <!-- Right: Minimap -->
-            <div class="pane-section minimap-pane">
-              <h4>Map Overview</h4>
-              <div class="minimap-container">
-                <canvas
-                  #minimapCanvas
-                  (click)="onMinimapClick($event)"
-                  (mousedown)="onMinimapMouseDown($event)"
-                  (mousemove)="onMinimapMouseMove($event)"
-                  (mouseup)="onMinimapMouseUp($event)"
-                ></canvas>
-              </div>
-            </div>
+            <app-minimap
+               class="pane-section-wrapper minimap-pane"
+               [tiles]="tiles"
+               [mapMaxX]="mapMaxX"
+               [mapMaxY]="mapMaxY"
+               [cameraX]="cameraX"
+               [cameraY]="cameraY"
+               [zoom]="zoom"
+               [selectedTile]="selectedTile"
+               [mainCanvasWidth]="mainCanvasWidth"
+               [mainCanvasHeight]="mainCanvasHeight"
+               (cameraMove)="onCameraMove($event)">
+            </app-minimap>
           </div>
         </div>
 
@@ -238,94 +231,15 @@ import { Subscription } from 'rxjs';
       flex-shrink: 0;
     }
 
-    .pane-section {
-      background: #0f0f23;
-      border-radius: 8px;
-      border: 1px solid #333;
-      padding: 0.75rem;
-      overflow: hidden;
-    }
-
-    .pane-section h4 {
-      color: #00d9ff;
-      margin: 0 0 0.5rem 0;
-      font-size: 0.9rem;
-      border-bottom: 1px solid #333;
-      padding-bottom: 0.4rem;
-    }
-
     /* Tile Info (left 20%) */
     .tile-info {
       width: 20%;
       min-width: 150px;
     }
 
-    .tile-details p {
-      color: #fff;
-      margin: 0.3rem 0;
-      font-size: 0.85rem;
-    }
-
-    .tile-details .label {
-      color: #888;
-    }
-
-    .terrain-preview {
-      width: 40px;
-      height: 40px;
-      border-radius: 4px;
-      border: 2px solid #555;
-      margin-top: 0.5rem;
-    }
-
-    .no-selection {
-      color: #666;
-      font-style: italic;
-      font-size: 0.85rem;
-    }
-
     /* Actions (center 60%) */
     .actions-pane {
       flex: 1;
-    }
-
-    .action-buttons {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .action-btn {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.3rem;
-      padding: 0.75rem 1rem;
-      background: #1a1a2e;
-      border: 1px solid #444;
-      border-radius: 8px;
-      color: #fff;
-      cursor: pointer;
-      transition: all 0.2s;
-      min-width: 80px;
-    }
-
-    .action-btn:hover:not(:disabled) {
-      background: #2a2a4e;
-      border-color: #00d9ff;
-    }
-
-    .action-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .action-icon {
-      font-size: 1.5rem;
-    }
-
-    .action-btn span:last-child {
-      font-size: 0.75rem;
     }
 
     /* Minimap (right 20%) */
@@ -334,20 +248,10 @@ import { Subscription } from 'rxjs';
       min-width: 150px;
     }
 
-    .minimap-container {
-      position: relative;
-      width: 100%;
-      height: calc(100% - 30px);
-      background: #000;
-      border: 1px solid #444;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .minimap-container canvas {
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
+    /* Wrapper helper to ensure components take full height */
+    .pane-section-wrapper {
+        display: block;
+        height: 100%;
     }
 
     .chat-sidebar {
@@ -361,18 +265,16 @@ import { Subscription } from 'rxjs';
 export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('gameCanvas') canvasRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('canvasContainer') containerRef!: ElementRef<HTMLDivElement>;
-  @ViewChild('minimapCanvas') minimapRef!: ElementRef<HTMLCanvasElement>;
 
   Math = Math; // Expose Math for template
 
   private ctx!: CanvasRenderingContext2D;
-  private minimapCtx!: CanvasRenderingContext2D;
   private subscriptions: Subscription[] = [];
-  private tiles: Map<string, Tile> = new Map();
+  tiles: Map<string, Tile> = new Map();
 
   // Viewport / camera
-  private cameraX = 0;
-  private cameraY = 0;
+  cameraX = 0;
+  cameraY = 0;
   zoom = 1;
   private readonly MIN_ZOOM = 0.25;
   private readonly MAX_ZOOM = 2;
@@ -384,14 +286,13 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   private lastMouseX = 0;
   private lastMouseY = 0;
 
-  // Minimap panning
-  private isMinimapDragging = false;
-
   // Map bounds tracking
-  private mapMinX = 0;
-  private mapMinY = 0;
-  private mapMaxX = 0;
-  private mapMaxY = 0;
+  mapMaxX = 0;
+  mapMaxY = 0;
+
+  // Canvas dimensions for minimap
+  mainCanvasWidth = 0;
+  mainCanvasHeight = 0;
 
   // Selection
   selectedTile: Tile | null = null;
@@ -399,6 +300,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   private selectedTileY = -1;
 
   hasReceivedTiles = false;
+  countdown: number | null = null;
 
   terrainTypes = [
     { type: TerrainType.GRASS, name: 'Grass', color: '#4CAF50' },
@@ -418,29 +320,41 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     public authService: AuthService,
     private socketService: SocketService,
     private router: Router
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     // Listen for tile changes from server
     const tileSub = this.socketService.onCommand('GAME', 'TILE_CHANGED')
       .subscribe(cmd => {
+        this.hasReceivedTiles = true;
         this.handleTileChanged(cmd.data);
       });
     this.subscriptions.push(tileSub);
+
+    // Listen for countdown
+    const countdownSub = this.socketService.onCommand('GAME', 'COUNTDOWN')
+      .subscribe(cmd => {
+        this.countdown = cmd.data['seconds'];
+        this.hasReceivedTiles = false; // Reset to show countdown
+        this.startLocalCountdown();
+      });
+    this.subscriptions.push(countdownSub);
+  }
+
+  private startLocalCountdown(): void {
+    const timer = setInterval(() => {
+      if (this.countdown !== null && this.countdown > 0) {
+        this.countdown--;
+      } else {
+        this.countdown = null;
+        clearInterval(timer);
+      }
+    }, 1000);
   }
 
   ngAfterViewInit(): void {
     const canvas = this.canvasRef.nativeElement;
     this.ctx = canvas.getContext('2d')!;
-
-    // Initialize minimap after a short delay to ensure element is ready
-    setTimeout(() => {
-      if (this.minimapRef) {
-        const minimapCanvas = this.minimapRef.nativeElement;
-        this.minimapCtx = minimapCanvas.getContext('2d')!;
-        this.resizeMinimap();
-      }
-    }, 100);
 
     this.resizeCanvas();
     this.render();
@@ -457,7 +371,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   @HostListener('window:resize')
   onResize(): void {
     this.resizeCanvas();
-    this.resizeMinimap();
     this.render();
   }
 
@@ -466,16 +379,10 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     const canvas = this.canvasRef.nativeElement;
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
-  }
 
-  private resizeMinimap(): void {
-    if (!this.minimapRef) return;
-    const minimapCanvas = this.minimapRef.nativeElement;
-    const container = minimapCanvas.parentElement;
-    if (container) {
-      minimapCanvas.width = container.clientWidth;
-      minimapCanvas.height = container.clientHeight;
-    }
+    // Update public properties for minimap
+    this.mainCanvasWidth = canvas.width;
+    this.mainCanvasHeight = canvas.height;
   }
 
   private get tileSize(): number {
@@ -537,9 +444,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.selectedTile) {
       this.drawSelection();
     }
-
-    // Render minimap
-    this.renderMinimap();
   }
 
   private drawTile(tile: Tile): void {
@@ -682,7 +586,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   leaveGame(): void {
-    this.lobbyService.leaveLobby();
+    this.lobbyService.leaveGame();
     this.router.navigate(['/lobby']);
   }
 
@@ -736,123 +640,21 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
-  getTerrainName(type: TerrainType): string {
-    const terrain = this.terrainTypes.find(t => t.type === type);
-    return terrain?.name || 'Unknown';
-  }
-
-  canBuildOnTile(tile: Tile | null): boolean {
-    if (!tile) return false;
-    // Can only build on grass or dirt
-    return tile.terrainType === TerrainType.GRASS || tile.terrainType === TerrainType.DIRT;
-  }
-
-  onCreateTurret(): void {
-    if (!this.selectedTile || !this.canBuildOnTile(this.selectedTile)) return;
-    console.log('Creating turret at', this.selectedTile.x, this.selectedTile.y);
-    // TODO: Send command to server
-  }
-
-  // Minimap
-  private renderMinimap(): void {
-    if (!this.minimapCtx || !this.minimapRef) return;
-
-    const canvas = this.minimapRef.nativeElement;
-    const ctx = this.minimapCtx;
-
-    // Clear minimap
-    ctx.fillStyle = '#0a0a15';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (this.mapMaxX === 0 || this.mapMaxY === 0) return;
-
-    // Calculate scale to fit map in minimap
-    const scaleX = canvas.width / (this.mapMaxX * this.BASE_TILE_SIZE);
-    const scaleY = canvas.height / (this.mapMaxY * this.BASE_TILE_SIZE);
-    const scale = Math.min(scaleX, scaleY);
-
-    // Offset to center the map
-    const mapPixelWidth = this.mapMaxX * this.BASE_TILE_SIZE * scale;
-    const mapPixelHeight = this.mapMaxY * this.BASE_TILE_SIZE * scale;
-    const offsetX = (canvas.width - mapPixelWidth) / 2;
-    const offsetY = (canvas.height - mapPixelHeight) / 2;
-
-    // Draw all tiles
-    const tilePixelSize = Math.max(1, this.BASE_TILE_SIZE * scale);
-    this.tiles.forEach(tile => {
-      const x = offsetX + tile.x * this.BASE_TILE_SIZE * scale;
-      const y = offsetY + tile.y * this.BASE_TILE_SIZE * scale;
-      ctx.fillStyle = this.getTerrainColor(tile.terrainType);
-      ctx.fillRect(x, y, tilePixelSize, tilePixelSize);
-    });
-
-    // Draw viewport rectangle (what the main canvas is showing)
-    const mainCanvas = this.canvasRef.nativeElement;
-    const viewX = offsetX + (this.cameraX / this.zoom) * scale;
-    const viewY = offsetY + (this.cameraY / this.zoom) * scale;
-    const viewW = (mainCanvas.width / this.zoom) * scale;
-    const viewH = (mainCanvas.height / this.zoom) * scale;
-
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(viewX, viewY, viewW, viewH);
-
-    // Draw selected tile marker
-    if (this.selectedTile) {
-      const selX = offsetX + this.selectedTile.x * this.BASE_TILE_SIZE * scale;
-      const selY = offsetY + this.selectedTile.y * this.BASE_TILE_SIZE * scale;
-      ctx.strokeStyle = '#00d9ff';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(selX - 1, selY - 1, tilePixelSize + 2, tilePixelSize + 2);
+  // Action Panel Handler
+  onActionTriggered(action: string): void {
+    console.log('Action triggered:', action);
+    if (action === 'createTurret') {
+      // TODO: Implement create turret logic
+      if (this.selectedTile) {
+        console.log('Creating turret at', this.selectedTile.x, this.selectedTile.y);
+      }
     }
   }
 
-  onMinimapClick(event: MouseEvent): void {
-    this.navigateFromMinimap(event);
-  }
-
-  onMinimapMouseDown(event: MouseEvent): void {
-    this.isMinimapDragging = true;
-    this.navigateFromMinimap(event);
-  }
-
-  onMinimapMouseMove(event: MouseEvent): void {
-    if (!this.isMinimapDragging) return;
-    this.navigateFromMinimap(event);
-  }
-
-  onMinimapMouseUp(event: MouseEvent): void {
-    this.isMinimapDragging = false;
-  }
-
-  private navigateFromMinimap(event: MouseEvent): void {
-    if (!this.minimapRef || this.mapMaxX === 0 || this.mapMaxY === 0) return;
-
-    const canvas = this.minimapRef.nativeElement;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-
-    // Calculate scale
-    const scaleX = canvas.width / (this.mapMaxX * this.BASE_TILE_SIZE);
-    const scaleY = canvas.height / (this.mapMaxY * this.BASE_TILE_SIZE);
-    const scale = Math.min(scaleX, scaleY);
-
-    // Offset
-    const mapPixelWidth = this.mapMaxX * this.BASE_TILE_SIZE * scale;
-    const mapPixelHeight = this.mapMaxY * this.BASE_TILE_SIZE * scale;
-    const offsetX = (canvas.width - mapPixelWidth) / 2;
-    const offsetY = (canvas.height - mapPixelHeight) / 2;
-
-    // Convert click to world position
-    const worldX = (mouseX - offsetX) / scale;
-    const worldY = (mouseY - offsetY) / scale;
-
-    // Center camera on this position
-    const mainCanvas = this.canvasRef.nativeElement;
-    this.cameraX = worldX * this.zoom - mainCanvas.width / 2;
-    this.cameraY = worldY * this.zoom - mainCanvas.height / 2;
-
+  // Minimap Navigation Handler
+  onCameraMove(pos: { x: number, y: number }): void {
+    this.cameraX = pos.x;
+    this.cameraY = pos.y;
     this.clampCamera();
     this.render();
   }

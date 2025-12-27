@@ -104,4 +104,9 @@ export class LobbyService {
     this.currentLobby.set(null);
     this.inGame.set(false);
   }
+
+  leaveGame(): void {
+    this.socketService.sendCommand(ClientSocketSubject.GAME, SocketTopic.LEAVE_GAME);
+    this.leaveLobby();
+  }
 }

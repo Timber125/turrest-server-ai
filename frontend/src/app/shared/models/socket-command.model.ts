@@ -8,13 +8,15 @@ export interface SocketCommand {
 export enum ClientSocketSubject {
   SOCKET_CONNECT = 'SOCKET_CONNECT',
   LOBBY = 'LOBBY',
-  GLOBAL_CHAT = 'GLOBAL_CHAT'
+  GLOBAL_CHAT = 'GLOBAL_CHAT',
+  GAME = 'GAME'
 }
 
 // Server -> Client Subjects
 export enum ServerSocketSubject {
   DISPLAY_CHAT = 'DISPLAY_CHAT',
-  LOBBY = 'LOBBY'
+  LOBBY = 'LOBBY',
+  GAME = 'GAME'
 }
 
 // Topics
@@ -27,6 +29,7 @@ export enum SocketTopic {
   CREATE = 'CREATE',
   JOIN = 'JOIN',
   START_GAME = 'START_GAME',
+  LEAVE_GAME = 'LEAVE_GAME',
 
   // Lobby responses
   DATA_ALL_LOBBIES = 'DATA:ALL_LOBBIES',

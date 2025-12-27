@@ -5,6 +5,6 @@ public enum ServerSocketSubject {
     GROUP_CHAT,
     PRIVATE_CHAT,
     SOCKET_CONNECT,
-    LOBBY;
-
+    LOBBY,
+    GAME;
 }

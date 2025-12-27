@@ -65,6 +65,23 @@ export class AuthService {
     this.currentUser.set(null);
   }
 
+  refreshToken(): Observable<AuthResponse> {
+    const userId = this.getUserId();
+    if (!userId) {
+      throw new Error('No user ID found for refresh');
+    }
+    return this.http.post<AuthResponse>(`${this.API_URL}/refresh`, { userId }).pipe(
+      tap(response => {
+        const user: User = {
+          id: response.userid,
+          username: response.username,
+          token: response.accessToken
+        };
+        this.storeUser(user);
+      })
+    );
+  }
+
   getToken(): string | null {
     return this.currentUser()?.token ?? null;
   }

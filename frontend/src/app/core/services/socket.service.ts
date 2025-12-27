@@ -20,7 +20,16 @@ export class SocketService {
   private connectionState = signal<ConnectionState>('disconnected');
   readonly state = this.connectionState.asReadonly();
 
-  constructor(private authService: AuthService) {}
+  private refreshTokenInProgress = false;
+  private tabId: string;
+
+  constructor(private authService: AuthService) {
+    this.tabId = sessionStorage.getItem('turrest_tab_id') || '';
+    if (!this.tabId) {
+      this.tabId = crypto.randomUUID();
+      sessionStorage.setItem('turrest_tab_id', this.tabId);
+    }
+  }
 
   connect(): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
@@ -43,6 +52,12 @@ export class SocketService {
         try {
           const command: SocketCommand = JSON.parse(event.data);
           console.log('Received:', command);
+
+          if (command.subject === 'CORE' && command.topic === 'TOKEN_INVALID') {
+            this.handleTokenInvalid();
+            return;
+          }
+
           this.messageSubject.next(command);
         } catch (e) {
           console.error('Failed to parse message:', event.data);
@@ -72,7 +87,8 @@ export class SocketService {
     if (token && userId) {
       this.sendCommand(ClientSocketSubject.SOCKET_CONNECT, SocketTopic.LOGIN, {
         token: token,
-        userid: userId
+        userid: userId,
+        tabid: this.tabId
       });
     }
   }
@@ -97,6 +113,27 @@ export class SocketService {
       this.socket = null;
     }
     this.connectionState.set('disconnected');
+  }
+
+  private handleTokenInvalid(): void {
+    if (this.refreshTokenInProgress) return;
+    this.refreshTokenInProgress = true;
+
+    console.warn('Token invalid, attempting refresh...');
+    this.authService.refreshToken().subscribe({
+      next: () => {
+        console.log('Token refreshed successfully, reconnecting...');
+        this.refreshTokenInProgress = false;
+        this.disconnect();
+        this.connect();
+      },
+      error: (err) => {
+        console.error('Token refresh failed:', err);
+        this.refreshTokenInProgress = false;
+        this.authService.logout();
+        // Redirect to login could be handled here or via AuthGuard/service
+      }
+    });
   }
 
   sendCommand(subject: string, topic: string, data: Record<string, any> = {}): void {
