@@ -1,12 +1,10 @@
 package be.lefief.sockets.handlers.lobby;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
-import be.lefief.sockets.commands.client.emission.CreateLobbyCommand;
 import be.lefief.sockets.commands.client.emission.StartLobbyGameCommand;
 import be.lefief.sockets.handlers.CommandHandler;
 import be.lefief.sockets.handlers.LobbyHandler;
-import be.lefief.sockets.handlers.routing.LobbyCreateHandler;
 import be.lefief.sockets.handlers.routing.StartLobbyGameHandler;
 import org.springframework.stereotype.Component;
 
@@ -22,8 +20,8 @@ public class StartLobbyGameListener extends CommandHandler<StartLobbyGameCommand
     }
 
     @Override
-    public void accept(SecuredClientToServerCommand<StartLobbyGameCommand> command, SocketHandler socketHandler) {
-        lobbyHandler.handleStartLobbyGame(command, socketHandler);
+    public void accept(SecuredClientToServerCommand<StartLobbyGameCommand> command, ClientSession clientSession) {
+        lobbyHandler.handleStartLobbyGame(command, clientSession);
     }
 
 }

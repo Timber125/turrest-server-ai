@@ -1,8 +1,7 @@
 package be.lefief.sockets.handlers.lobby;
 
-import be.lefief.service.lobby.LobbyService;
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.client.emission.CreateLobbyCommand;
 import be.lefief.sockets.handlers.CommandHandler;
 import be.lefief.sockets.handlers.LobbyHandler;
@@ -21,8 +20,8 @@ public class CreateLobbyListener extends CommandHandler<CreateLobbyCommand> {
     }
 
     @Override
-    public void accept(SecuredClientToServerCommand<CreateLobbyCommand> command, SocketHandler socketHandler) {
-        lobbyHandler.handleCreateLobby(command, socketHandler);
+    public void accept(SecuredClientToServerCommand<CreateLobbyCommand> command, ClientSession clientSession) {
+        lobbyHandler.handleCreateLobby(command, clientSession);
     }
 
 }

@@ -2,6 +2,7 @@ package be.lefief.service.lobby;
 
 import be.lefief.lobby.Lobby;
 import be.lefief.lobby.SocketConnectionAcceptor;
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
 import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ServerToClientCommand;
@@ -22,8 +23,8 @@ import java.util.*;
 public class LobbyService implements SocketConnectionAcceptor {
 
     private static final Logger LOG = LoggerFactory.getLogger(LobbyService.class);
-    private final Map<UUID, SocketHandler> identifiedClients;
-    private final List<SocketHandler> unidentifiedClients;
+    private final Map<UUID, ClientSession> identifiedClients;
+    private final List<ClientSession> unidentifiedClients;
     private final Map<UUID, Lobby> lobbyHosts;
     public LobbyService() {
         this.lobbyHosts = new HashMap<>();
@@ -73,20 +74,20 @@ public class LobbyService implements SocketConnectionAcceptor {
         }
     }
 
-    public void handleLogin(UUID userId, SocketHandler socketHandler) {
-        identifiedClients.put(userId, socketHandler);
-        unidentifiedClients.remove(socketHandler);
-        emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(), socketHandler.getClientName() + " Logged in."));
+    public void handleLogin(UUID userId, ClientSession clientSession) {
+        identifiedClients.put(userId, clientSession);
+        unidentifiedClients.remove(clientSession);
+        emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(), clientSession.getClientName() + " Logged in."));
     }
 
-    private Runnable onClose(SocketHandler socketHandler) {
+    private Runnable onClose(ClientSession clientSession) {
         return () -> {
-            unidentifiedClients.remove(socketHandler);
-            UUID clientID = socketHandler.getClientID();
+            unidentifiedClients.remove(clientSession);
+            UUID clientID = clientSession.getClientID();
             if (clientID == null) {
-                unidentifiedClients.remove(socketHandler);
+                unidentifiedClients.remove(clientSession);
             } else {
-                SocketHandler removed = identifiedClients.remove(clientID);
+                ClientSession removed = identifiedClients.remove(clientID);
                 removeLobbyHostForUser(clientID);
                 removeUserFromAllLobbies(clientID);
                 emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(), removed.getUserIdentifiedClientName() + " Disconnected."));
@@ -124,5 +125,16 @@ public class LobbyService implements SocketConnectionAcceptor {
         if(lobby != null){
             lobby.getPlayers().forEach(playerId -> identifiedClients.get(playerId).sendCommand(serverToClientCommand));
         }
+    }
+
+    public List<ClientSession> getLobbyPlayerSessions(UUID lobbyId) {
+        Lobby lobby = lobbyHosts.get(lobbyId);
+        if (lobby != null) {
+            return lobby.getPlayers().stream()
+                    .map(identifiedClients::get)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toList());
+        }
+        return new ArrayList<>();
     }
 }

@@ -1,7 +1,5 @@
 package be.lefief.sockets.commands.client.emission;
 
-import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.sockets.commands.client.ServerSocketSubject;
 import com.fasterxml.jackson.annotation.JsonIgnore;

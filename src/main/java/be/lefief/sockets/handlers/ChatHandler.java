@@ -1,8 +1,8 @@
 package be.lefief.sockets.handlers;
 
 import be.lefief.service.lobby.LobbyService;
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.client.emission.GlobalChatCommand;
 import be.lefief.sockets.commands.factories.CommandFactory;
 import be.lefief.sockets.handlers.routing.GlobalChatHandler;
@@ -21,7 +21,7 @@ public class ChatHandler extends CommandHandler<GlobalChatCommand> {
     }
 
     @Override
-    public void accept(SecuredClientToServerCommand<GlobalChatCommand> socketCommand, SocketHandler socketHandler) {
+    public void accept(SecuredClientToServerCommand<GlobalChatCommand> socketCommand, ClientSession clientSession) {
         lobbyService.emitGlobalMessage(CommandFactory.USER_MESSAGE(socketCommand.getServerReceivedTime(), socketCommand.getClientName(), socketCommand.getClientId(), getMessageData(socketCommand)));
     }
 

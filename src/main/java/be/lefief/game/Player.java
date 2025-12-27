@@ -1,6 +1,6 @@
 package be.lefief.game;
 
-import be.lefief.sockets.SocketHandler;
+import be.lefief.sockets.ClientSession;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -10,7 +10,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class Player {
 
-    private SocketHandler socketHandler;
+    private ClientSession clientSession;
     private Integer playerNumber;
     private UUID gameID;
 

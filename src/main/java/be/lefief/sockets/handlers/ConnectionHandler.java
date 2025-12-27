@@ -3,8 +3,8 @@ package be.lefief.sockets.handlers;
 import be.lefief.config.FakeKeycloak;
 import be.lefief.service.lobby.LobbyService;
 import be.lefief.service.userprofile.UserProfileService;
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.client.emission.ConnectionCommand;
 import be.lefief.sockets.commands.client.reception.DisplayChatCommand;
 import be.lefief.sockets.handlers.routing.SocketConnectHandler;
@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.net.Socket;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,19 +41,19 @@ public class ConnectionHandler extends CommandHandler<ConnectionCommand> {
 
 
     @Override
-    public void accept(SecuredClientToServerCommand<ConnectionCommand> command, SocketHandler socketHandler) {
+    public void accept(SecuredClientToServerCommand<ConnectionCommand> command, ClientSession clientSession) {
         String token = getToken(command);
         UUID userId = getUserID(command);
         boolean authenticateSuccess = fakeKeycloak.useAccessToken(token, userId);
         if (authenticateSuccess) {
             LOG.info("Authentication success");
-            socketHandler.authenticate(userProfileService, userId);
-            socketHandler.sendCommand(new DisplayChatCommand("Login successful - Welcome " + socketHandler.getClientName()));
-            lobbyService.handleLogin(userId, socketHandler);
+            clientSession.authenticate(userProfileService, userId);
+            clientSession.sendCommand(new DisplayChatCommand("Login successful - Welcome " + clientSession.getClientName()));
+            lobbyService.handleLogin(userId, clientSession);
         } else {
             LOG.info("Authentication failure: {} {}", token, userId.toString());
-            socketHandler.sendCommand(new DisplayChatCommand("Login unsuccessful - token invalid for client. tokens are only valid for 60s."));
-            socketHandler.close();
+            clientSession.sendCommand(new DisplayChatCommand("Login unsuccessful - token invalid for client. tokens are only valid for 4 hours."));
+            clientSession.close();
         }
     }
 }

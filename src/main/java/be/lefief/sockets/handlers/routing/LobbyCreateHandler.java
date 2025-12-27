@@ -1,7 +1,7 @@
 package be.lefief.sockets.handlers.routing;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.sockets.commands.client.emission.ConnectionCommand;
 import be.lefief.sockets.commands.client.emission.CreateLobbyCommand;
@@ -14,11 +14,11 @@ public class LobbyCreateHandler extends CommandTopicHandler<CreateLobbyCommand> 
         super(CreateLobbyCommand.SUBJECT.name(), CreateLobbyCommand.TOPIC);
     }
     @Override
-    public SecuredClientToServerCommand<CreateLobbyCommand> identify(ClientToServerCommand command, SocketHandler socketHandler) {
+    public SecuredClientToServerCommand<CreateLobbyCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new CreateLobbyCommand(command.getData()),
-                socketHandler.getClientID(),
-                socketHandler.getClientName()
+                clientSession.getClientID(),
+                clientSession.getClientName()
         );
     }
 }

@@ -1,7 +1,7 @@
 package be.lefief.util;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.sockets.handlers.CommandHandler;
 import lombok.Getter;
@@ -34,8 +34,8 @@ public abstract class CommandTopicHandler<T extends ClientToServerCommand> {
         listeners.remove(commandHandler);
     }
 
-    public abstract SecuredClientToServerCommand<T> identify(ClientToServerCommand command, SocketHandler socketHandler);
-    public void handle(ClientToServerCommand clientToServerCommand, SocketHandler handler) {
-        listeners.forEach(listener -> listener.accept(identify(clientToServerCommand, handler), handler));
+    public abstract SecuredClientToServerCommand<T> identify(ClientToServerCommand command, ClientSession clientSession);
+    public void handle(ClientToServerCommand clientToServerCommand, ClientSession clientSession) {
+        listeners.forEach(listener -> listener.accept(identify(clientToServerCommand, clientSession), clientSession));
     }
 }

@@ -128,6 +128,12 @@
             <artifactId>h2</artifactId>
             <version>1.4.200</version>
         </dependency>
+        <!-- WebSocket support for browser compatibility -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+            <version>${springboot.version}</version>
+        </dependency>
     </dependencies>
 
     <build>

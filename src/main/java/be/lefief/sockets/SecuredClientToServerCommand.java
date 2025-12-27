@@ -27,18 +27,18 @@ public class SecuredClientToServerCommand<T extends ClientToServerCommand> {
         return command;
     }
 
-    public static <T extends ClientToServerCommand> SecuredClientToServerCommand<T> from(SocketHandler socketHandler, T clientToServerCommand, UserProfileService userProfileService) {
-        if (socketHandler.getClientID() == null) {
+    public static <T extends ClientToServerCommand> SecuredClientToServerCommand<T> from(ClientSession clientSession, T clientToServerCommand, UserProfileService userProfileService) {
+        if (clientSession.getClientID() == null) {
             return new SecuredClientToServerCommand(clientToServerCommand,
                     null,
                     null
             );
         }
-        UserData userData = userProfileService.findByID(socketHandler.getClientID())
+        UserData userData = userProfileService.findByID(clientSession.getClientID())
                 .orElseThrow(() -> new IllegalArgumentException("Illegal client ID")); // unauthenticated
         return new SecuredClientToServerCommand(
                 clientToServerCommand,
-                socketHandler.getClientID(),
+                clientSession.getClientID(),
                 userData.getName()
         );
     }

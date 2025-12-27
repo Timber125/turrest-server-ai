@@ -1,6 +1,6 @@
 package be.lefief.sockets.handlers.routing;
 
-import be.lefief.sockets.SocketHandler;
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.util.ClientSubjectHandler;
 import be.lefief.util.CommandTopicHandler;
@@ -31,8 +31,8 @@ public class CommandRouter {
         subjectHandlerMap.get(commandTopicHandler.getSubject().toUpperCase()).getTopicHandlers().put(commandTopicHandler.getTopic().toUpperCase(), commandTopicHandler);
     }
 
-    public void handle(ClientToServerCommand command, SocketHandler socketHandler) {
-        subjectHandlerMap.get(command.getSubject().toUpperCase()).handle(command, socketHandler);
+    public void handle(ClientToServerCommand command, ClientSession clientSession) {
+        subjectHandlerMap.get(command.getSubject().toUpperCase()).handle(command, clientSession);
     }
 
 

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(mvn compile:*)",
+      "Bash(java -version:*)",
+      "Bash(npx @angular/cli:*)",
+      "Bash(npx ng build)",
+      "Bash(npx ng serve:*)",
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "Bash(curl:*)",
+      "Bash(./mvnw:*)",
+      "Bash(mvn spring-boot:run:*)"
+    ]
+  }
+}

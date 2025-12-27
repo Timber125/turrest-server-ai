@@ -22,7 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class SocketHandler {
+public class SocketHandler implements ClientSession {
     private static final Logger LOG = LoggerFactory.getLogger(SocketHandler.class);
     private final Socket clientSocket;
     private final PrintWriter out;
@@ -69,14 +69,17 @@ public class SocketHandler {
         }
     }
 
+    @Override
     public void sendMessage(String message) {
         out.println(message);
     }
 
+    @Override
     public void sendCommand(ServerToClientCommand serverToClientCommand){
         final String cmd = CommandSerializer.serialize(serverToClientCommand);
         threadPoolExecutor.submit(() -> sendMessage(cmd));
     }
+    @Override
     public void close(){
         try {
             in.close();
@@ -97,6 +100,7 @@ public class SocketHandler {
     }
 
 
+    @Override
     public void setOnClose(Runnable r) {
         this.onClose = r;
     }
@@ -113,6 +117,7 @@ public class SocketHandler {
         return in;
     }
 
+    @Override
     public UUID getClientID() {
         return (userDataSupplier == null) ? null : userDataSupplier.get().getId();
     }
@@ -121,6 +126,7 @@ public class SocketHandler {
         return onClose;
     }
 
+    @Override
     public void setOnMessage(Consumer<String> stringConsumer) {
         this.onMessage = stringConsumer;
     }
@@ -129,19 +135,28 @@ public class SocketHandler {
         return onMessage;
     }
 
+    @Override
     public String getClientName() {
         return getUserData().getName();
     }
 
+    @Override
     public String getUserIdentifiedClientName(){
         return String.format("%s(%s)", getClientName(), "#" + getClientID().toString().substring(0, 4));
     }
+
+    @Override
     public void authenticate(UserProfileService userProfileService, UUID clientId) {
         userDataSupplier = () -> userProfileService.findByID(clientId).orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
+    @Override
     public UserData getUserData(){
         return (userDataSupplier == null) ? null : userDataSupplier.get();
     }
 
+    @Override
+    public String getRemoteAddress() {
+        return clientSocket.getInetAddress().toString();
+    }
 }

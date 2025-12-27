@@ -1,7 +1,7 @@
 package be.lefief.sockets.handlers;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.sockets.commands.client.emission.CreateLobbyCommand;
 import be.lefief.util.CommandTopicHandler;
@@ -23,17 +23,17 @@ public abstract class CommandHandler<T extends ClientToServerCommand> {
     public void closeChannel(){
         topicHandler.removeListener(this);
     }
-    public abstract void accept(SecuredClientToServerCommand<T> command, SocketHandler socketHandler);
+    public abstract void accept(SecuredClientToServerCommand<T> command, ClientSession clientSession);
 
-    void accept(T command, SocketHandler socketHandler){
-        accept(secure(socketHandler, command), socketHandler);
+    void accept(T command, ClientSession clientSession){
+        accept(secure(clientSession, command), clientSession);
     }
 
-    SecuredClientToServerCommand<T> secure(SocketHandler socketHandler, T command){
+    SecuredClientToServerCommand<T> secure(ClientSession clientSession, T command){
         return new SecuredClientToServerCommand<T>(
                 command,
-                socketHandler.getClientID(),
-                Optional.ofNullable(socketHandler.getClientName()).orElse("<unauthenticated>")
+                clientSession.getClientID(),
+                Optional.ofNullable(clientSession.getClientName()).orElse("<unauthenticated>")
         );
     }
 

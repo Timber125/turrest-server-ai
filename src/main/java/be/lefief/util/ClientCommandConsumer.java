@@ -1,6 +1,6 @@
 package be.lefief.util;
 
-import be.lefief.sockets.SocketHandler;
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.handlers.routing.CommandRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,11 +13,11 @@ public class ClientCommandConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientCommandConsumer.class);
 
-    public static Consumer<String> createCommandConsumer(SocketHandler socketHandler, CommandRouter commandRouter){
+    public static Consumer<String> createCommandConsumer(ClientSession clientSession, CommandRouter commandRouter){
         return (message) -> {
-            LOG.info("Client {} @ {} sent: {}", Optional.ofNullable(socketHandler.getClientID()).map(UUID::toString).orElse("<unauthenticated>"), socketHandler.getClientSocket().getInetAddress(), message);
+            LOG.info("Client {} @ {} sent: {}", Optional.ofNullable(clientSession.getClientID()).map(UUID::toString).orElse("<unauthenticated>"), clientSession.getRemoteAddress(), message);
             Optional.ofNullable(CommandSerializer.deserializeClientToServerCommand(message))
-                    .ifPresent(deserializedCommand -> commandRouter.handle(deserializedCommand, socketHandler));
+                    .ifPresent(deserializedCommand -> commandRouter.handle(deserializedCommand, clientSession));
         };
     }
 

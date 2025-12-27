@@ -1,9 +1,8 @@
 package be.lefief.sockets.handlers.routing;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
-import be.lefief.sockets.commands.client.emission.JoinLobbyCommand;
 import be.lefief.sockets.commands.client.emission.RefreshLobbiesCommand;
 import be.lefief.util.CommandTopicHandler;
 import org.springframework.stereotype.Component;
@@ -14,11 +13,11 @@ public class LobbyListAllHandler extends CommandTopicHandler<RefreshLobbiesComma
         super(RefreshLobbiesCommand.SUBJECT.name(), RefreshLobbiesCommand.TOPIC);
     }
     @Override
-    public SecuredClientToServerCommand<RefreshLobbiesCommand> identify(ClientToServerCommand command, SocketHandler socketHandler) {
+    public SecuredClientToServerCommand<RefreshLobbiesCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new RefreshLobbiesCommand(command.getData()),
-                socketHandler.getClientID(),
-                socketHandler.getClientName()
+                clientSession.getClientID(),
+                clientSession.getClientName()
         );
     }
 }

@@ -1,7 +1,7 @@
 package be.lefief.util;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import lombok.Getter;
 
@@ -25,7 +25,7 @@ public class ClientSubjectHandler {
         topicHandlers = new HashMap<>();
         topicHandlerCollection.forEach(topicHandler -> topicHandlers.put(topicHandler.getTopic().toUpperCase(), topicHandler));
     }
-    public void handle(ClientToServerCommand clientToServerCommand, SocketHandler socketHandler){
-        topicHandlers.get(clientToServerCommand.getTopic().toUpperCase()).handle(clientToServerCommand, socketHandler);
+    public void handle(ClientToServerCommand clientToServerCommand, ClientSession clientSession){
+        topicHandlers.get(clientToServerCommand.getTopic().toUpperCase()).handle(clientToServerCommand, clientSession);
     }
 }

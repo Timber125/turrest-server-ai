@@ -1,7 +1,7 @@
 package be.lefief.sockets.handlers.routing;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
 import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.sockets.commands.client.emission.ConnectionCommand;
 import be.lefief.sockets.commands.client.emission.GlobalChatCommand;
@@ -14,11 +14,11 @@ public class GlobalChatHandler extends CommandTopicHandler<GlobalChatCommand> {
         super(GlobalChatCommand.SUBJECT.name(), GlobalChatCommand.TOPIC);
     }
     @Override
-    public SecuredClientToServerCommand<GlobalChatCommand> identify(ClientToServerCommand command, SocketHandler socketHandler) {
+    public SecuredClientToServerCommand<GlobalChatCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new GlobalChatCommand(command.getData()),
-                socketHandler.getClientID(),
-                socketHandler.getClientName()
+                clientSession.getClientID(),
+                clientSession.getClientName()
         );
     }
 }

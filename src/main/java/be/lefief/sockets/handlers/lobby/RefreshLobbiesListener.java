@@ -1,8 +1,7 @@
 package be.lefief.sockets.handlers.lobby;
 
+import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
-import be.lefief.sockets.SocketHandler;
-import be.lefief.sockets.commands.client.emission.JoinLobbyCommand;
 import be.lefief.sockets.commands.client.emission.RefreshLobbiesCommand;
 import be.lefief.sockets.handlers.CommandHandler;
 import be.lefief.sockets.handlers.LobbyHandler;
@@ -20,8 +19,8 @@ public class RefreshLobbiesListener extends CommandHandler<RefreshLobbiesCommand
     }
 
     @Override
-    public void accept(SecuredClientToServerCommand<RefreshLobbiesCommand> command, SocketHandler socketHandler) {
-        lobbyHandler.handleGetAllLobbies(command, socketHandler);
+    public void accept(SecuredClientToServerCommand<RefreshLobbiesCommand> command, ClientSession clientSession) {
+        lobbyHandler.handleGetAllLobbies(command, clientSession);
     }
 
 }

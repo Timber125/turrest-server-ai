@@ -25,7 +25,7 @@ public class FakeKeycloak {
             public void run() {
                 accessTokenMap.remove(accessToken);
             }
-        }, 60000L);
+        }, 4 * 60 * 60 * 1000L); // 4 hours
         return accessToken;
     }
     public boolean useAccessToken(String accessToken, UUID clientId){
