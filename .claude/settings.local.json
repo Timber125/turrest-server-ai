@@ -32,7 +32,14 @@
       "mcp__plugin_playwright_playwright__browser_console_messages",
       "mcp__plugin_playwright_playwright__browser_network_requests",
       "mcp__plugin_playwright_playwright__browser_press_key",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "mcp__plugin_playwright_playwright__browser_tabs",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_select_option",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" spring-boot:run:*)",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot"
     ]
   }
 }

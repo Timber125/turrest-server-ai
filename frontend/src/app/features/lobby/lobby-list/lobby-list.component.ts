@@ -361,7 +361,7 @@ export class LobbyListComponent implements OnInit, OnDestroy {
 
   createLobby(): void {
     this.lobbyService.createLobby({
-      size: this.newLobby.size,
+      size: Number(this.newLobby.size),
       hidden: this.newLobby.hidden,
       password: this.newLobby.password,
       game: this.newLobby.game

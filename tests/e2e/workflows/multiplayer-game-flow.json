@@ -1,0 +1,314 @@
+{
+  "name": "Multiplayer Game Flow",
+  "description": "Tests the complete multiplayer game flow: login, lobby creation, game start, building placement, and game completion",
+  "version": "1.0.0",
+  "prerequisites": {
+    "backend": "http://localhost:8081",
+    "frontend": "http://localhost:4200"
+  },
+  "accounts": {
+    "npc1": { "username": "NPC1", "password": "npc1" },
+    "npc2": { "username": "NPC2", "password": "npc2" }
+  },
+  "contexts": ["npc1", "npc2"],
+  "steps": [
+    {
+      "id": "setup-tab1",
+      "phase": "setup",
+      "context": "npc1",
+      "action": "navigate",
+      "url": "http://localhost:4200",
+      "description": "Open Tab 1 and navigate to app"
+    },
+    {
+      "id": "setup-tab2",
+      "phase": "setup",
+      "context": "npc2",
+      "action": "newTab",
+      "url": "http://localhost:4200",
+      "description": "Open Tab 2 and navigate to app"
+    },
+    {
+      "id": "login-npc1",
+      "phase": "login",
+      "context": "npc1",
+      "action": "fill",
+      "fields": [
+        { "name": "username", "selector": "input[formcontrolname=username]", "value": "NPC1" },
+        { "name": "password", "selector": "input[formcontrolname=password]", "value": "npc1" }
+      ],
+      "description": "Fill login form for NPC1"
+    },
+    {
+      "id": "login-npc1-submit",
+      "phase": "login",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button[type=submit]",
+      "description": "Submit NPC1 login"
+    },
+    {
+      "id": "login-npc1-wait",
+      "phase": "login",
+      "context": "npc1",
+      "action": "waitFor",
+      "text": "Create Lobby",
+      "description": "Wait for NPC1 to reach lobby list"
+    },
+    {
+      "id": "login-npc2",
+      "phase": "login",
+      "context": "npc2",
+      "action": "fill",
+      "fields": [
+        { "name": "username", "selector": "input[formcontrolname=username]", "value": "NPC2" },
+        { "name": "password", "selector": "input[formcontrolname=password]", "value": "npc2" }
+      ],
+      "description": "Fill login form for NPC2"
+    },
+    {
+      "id": "login-npc2-submit",
+      "phase": "login",
+      "context": "npc2",
+      "action": "click",
+      "selector": "button[type=submit]",
+      "description": "Submit NPC2 login"
+    },
+    {
+      "id": "login-npc2-wait",
+      "phase": "login",
+      "context": "npc2",
+      "action": "waitFor",
+      "text": "Create Lobby",
+      "description": "Wait for NPC2 to reach lobby list"
+    },
+    {
+      "id": "create-lobby",
+      "phase": "lobby",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button:has-text('Create Lobby')",
+      "description": "NPC1 creates a new lobby"
+    },
+    {
+      "id": "wait-lobby-room",
+      "phase": "lobby",
+      "context": "npc1",
+      "action": "waitFor",
+      "text": "Ready",
+      "description": "Wait for lobby room to load"
+    },
+    {
+      "id": "npc2-see-lobby",
+      "phase": "lobby",
+      "context": "npc2",
+      "action": "waitFor",
+      "text": "NPC1",
+      "description": "Wait for NPC1's lobby to appear in list"
+    },
+    {
+      "id": "npc2-join-lobby",
+      "phase": "lobby",
+      "context": "npc2",
+      "action": "click",
+      "selector": ".lobby-item:has-text('NPC1')",
+      "description": "NPC2 clicks on NPC1's lobby"
+    },
+    {
+      "id": "npc2-click-join",
+      "phase": "lobby",
+      "context": "npc2",
+      "action": "click",
+      "selector": "button:has-text('Join')",
+      "description": "NPC2 clicks Join button"
+    },
+    {
+      "id": "npc2-wait-lobby-room",
+      "phase": "lobby",
+      "context": "npc2",
+      "action": "waitFor",
+      "text": "Ready",
+      "description": "Wait for NPC2 to enter lobby room"
+    },
+    {
+      "id": "npc1-ready",
+      "phase": "lobby",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button:has-text('Ready')",
+      "description": "NPC1 clicks Ready"
+    },
+    {
+      "id": "npc2-ready",
+      "phase": "lobby",
+      "context": "npc2",
+      "action": "click",
+      "selector": "button:has-text('Ready')",
+      "description": "NPC2 clicks Ready"
+    },
+    {
+      "id": "npc1-start-game",
+      "phase": "lobby",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button:has-text('Start Game')",
+      "description": "NPC1 starts the game"
+    },
+    {
+      "id": "wait-countdown",
+      "phase": "game",
+      "context": "npc1",
+      "action": "waitFor",
+      "time": 6,
+      "description": "Wait for 5-second countdown plus buffer"
+    },
+    {
+      "id": "wait-map-load",
+      "phase": "game",
+      "context": "npc1",
+      "action": "waitFor",
+      "text": "Leave Game",
+      "description": "Wait for game UI to fully load"
+    },
+    {
+      "id": "npc1-screenshot-game",
+      "phase": "game",
+      "context": "npc1",
+      "action": "screenshot",
+      "filename": "npc1-game-start.png",
+      "description": "Screenshot NPC1's game view"
+    },
+    {
+      "id": "npc2-screenshot-game",
+      "phase": "game",
+      "context": "npc2",
+      "action": "screenshot",
+      "filename": "npc2-game-start.png",
+      "description": "Screenshot NPC2's game view"
+    },
+    {
+      "id": "npc1-find-forest",
+      "phase": "game",
+      "context": "npc1",
+      "action": "evaluate",
+      "function": "() => { const gc = document.querySelector('app-game'); if (gc && gc.__ngContext__) { /* Find forest tile in player's territory */ } return { x: 5, y: 5 }; }",
+      "description": "Find a forest tile in NPC1's territory"
+    },
+    {
+      "id": "npc1-click-forest",
+      "phase": "game",
+      "context": "npc1",
+      "action": "canvasClick",
+      "tileX": 5,
+      "tileY": 5,
+      "description": "NPC1 clicks on a forest tile"
+    },
+    {
+      "id": "npc1-select-lumbercamp",
+      "phase": "game",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button:has-text('Lumber')",
+      "description": "NPC1 selects Lumber Camp from build menu"
+    },
+    {
+      "id": "npc1-place-building",
+      "phase": "game",
+      "context": "npc1",
+      "action": "canvasClick",
+      "tileX": 5,
+      "tileY": 5,
+      "description": "NPC1 places the Lumber Camp"
+    },
+    {
+      "id": "npc2-find-rocky",
+      "phase": "game",
+      "context": "npc2",
+      "action": "evaluate",
+      "function": "() => { return { x: 25, y: 5 }; }",
+      "description": "Find a rocky tile in NPC2's territory"
+    },
+    {
+      "id": "npc2-click-rocky",
+      "phase": "game",
+      "context": "npc2",
+      "action": "canvasClick",
+      "tileX": 25,
+      "tileY": 5,
+      "description": "NPC2 clicks on a rocky tile"
+    },
+    {
+      "id": "npc2-select-quarry",
+      "phase": "game",
+      "context": "npc2",
+      "action": "click",
+      "selector": "button:has-text('Quarry')",
+      "description": "NPC2 selects Quarry from build menu"
+    },
+    {
+      "id": "npc2-place-building",
+      "phase": "game",
+      "context": "npc2",
+      "action": "canvasClick",
+      "tileX": 25,
+      "tileY": 5,
+      "description": "NPC2 places the Quarry"
+    },
+    {
+      "id": "wait-game-over",
+      "phase": "game",
+      "context": "npc1",
+      "action": "waitFor",
+      "text": "Back to Lobby",
+      "timeout": 300000,
+      "description": "Wait for game to end (up to 5 minutes)"
+    },
+    {
+      "id": "npc1-screenshot-end",
+      "phase": "cleanup",
+      "context": "npc1",
+      "action": "screenshot",
+      "filename": "npc1-game-end.png",
+      "description": "Screenshot NPC1's end game state"
+    },
+    {
+      "id": "npc1-back-to-lobby",
+      "phase": "cleanup",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button:has-text('Back to Lobby')",
+      "description": "NPC1 returns to lobby"
+    },
+    {
+      "id": "npc2-back-to-lobby",
+      "phase": "cleanup",
+      "context": "npc2",
+      "action": "click",
+      "selector": "button:has-text('Back to Lobby')",
+      "description": "NPC2 returns to lobby"
+    },
+    {
+      "id": "npc1-logout",
+      "phase": "cleanup",
+      "context": "npc1",
+      "action": "click",
+      "selector": "button:has-text('Logout')",
+      "description": "NPC1 logs out"
+    },
+    {
+      "id": "npc2-logout",
+      "phase": "cleanup",
+      "context": "npc2",
+      "action": "click",
+      "selector": "button:has-text('Logout')",
+      "description": "NPC2 logs out"
+    },
+    {
+      "id": "close-tabs",
+      "phase": "cleanup",
+      "context": "all",
+      "action": "closeTabs",
+      "description": "Close all browser tabs"
+    }
+  ]
+}

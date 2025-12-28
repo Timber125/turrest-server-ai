@@ -53,6 +53,10 @@ public class WebSocketClientSession implements ClientSession {
 
     @Override
     public void sendCommand(ServerToClientCommand command) {
+        if (threadPoolExecutor.isShutdown()) {
+            LOG.debug("Cannot send command - executor is shutdown for session");
+            return;
+        }
         final String cmd = CommandSerializer.serialize(command);
         threadPoolExecutor.submit(() -> sendMessage(cmd));
     }
