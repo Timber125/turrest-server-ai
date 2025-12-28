@@ -19,7 +19,7 @@ public class GameLeaveHandler extends CommandTopicHandler<LeaveGameCommand> {
             ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new LeaveGameCommand(command),
-                clientSession.getClientID(),
-                clientSession.getClientName());
+                clientSession.getUserId(),
+                clientSession.getUserName());
     }
 }

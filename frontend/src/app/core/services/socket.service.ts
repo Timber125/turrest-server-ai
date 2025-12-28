@@ -22,15 +22,8 @@ export class SocketService {
   readonly state = this.connectionState.asReadonly();
 
   private tokenRejected = false;  // Flag to prevent reconnect after explicit token rejection
-  private tabId: string;
 
-  constructor(private authService: AuthService, private router: Router) {
-    this.tabId = sessionStorage.getItem('turrest_tab_id') || '';
-    if (!this.tabId) {
-      this.tabId = crypto.randomUUID();
-      sessionStorage.setItem('turrest_tab_id', this.tabId);
-    }
-  }
+  constructor(private authService: AuthService, private router: Router) {}
 
   connect(): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
@@ -92,8 +85,7 @@ export class SocketService {
     if (token && userId) {
       this.sendCommand(ClientSocketSubject.SOCKET_CONNECT, SocketTopic.LOGIN, {
         token: token,
-        userid: userId,
-        tabid: this.tabId
+        userid: userId
       });
     }
   }

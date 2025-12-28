@@ -32,8 +32,8 @@ public abstract class CommandHandler<T extends ClientToServerCommand> {
     SecuredClientToServerCommand<T> secure(ClientSession clientSession, T command){
         return new SecuredClientToServerCommand<T>(
                 command,
-                clientSession.getClientID(),
-                Optional.ofNullable(clientSession.getClientName()).orElse("<unauthenticated>")
+                clientSession.getUserId(),
+                Optional.ofNullable(clientSession.getUserName()).orElse("<unauthenticated>")
         );
     }
 

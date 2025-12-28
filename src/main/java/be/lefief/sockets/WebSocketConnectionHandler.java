@@ -45,7 +45,7 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
         // Set up message handler (similar to ClientCommandConsumer)
         clientSession.setOnMessage(message -> {
             LOG.info("WebSocket client {} @ {} sent: {}",
-                    Optional.ofNullable(clientSession.getClientID()).map(UUID::toString).orElse("<unauthenticated>"),
+                    Optional.ofNullable(clientSession.getUserId()).map(UUID::toString).orElse("<unauthenticated>"),
                     clientSession.getRemoteAddress(),
                     message);
 
@@ -57,12 +57,11 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
 
         // Set up close handler
         clientSession.setOnClose(() -> {
-            UUID clientId = clientSession.getClientID();
-            String tabId = clientSession.getTabId();
-            LOG.info("WebSocket client {} (tab {}) disconnected", clientId, tabId);
+            UUID userId = clientSession.getUserId();
+            LOG.info("WebSocket client {} disconnected", userId);
             sessions.remove(session.getId());
-            if (clientId != null) {
-                gameService.handlePlayerDisconnect(clientId + ":" + tabId, clientId);
+            if (userId != null) {
+                gameService.handlePlayerDisconnect(userId);
             }
         });
     }

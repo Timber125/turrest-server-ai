@@ -16,8 +16,8 @@ public class LobbyJoinHandler extends CommandTopicHandler<JoinLobbyCommand> {
     public SecuredClientToServerCommand<JoinLobbyCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new JoinLobbyCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

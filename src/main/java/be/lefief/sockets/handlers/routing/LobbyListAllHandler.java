@@ -16,8 +16,8 @@ public class LobbyListAllHandler extends CommandTopicHandler<RefreshLobbiesComma
     public SecuredClientToServerCommand<RefreshLobbiesCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new RefreshLobbiesCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

@@ -22,7 +22,7 @@ public class ChatHandler extends CommandHandler<GlobalChatCommand> {
 
     @Override
     public void accept(SecuredClientToServerCommand<GlobalChatCommand> socketCommand, ClientSession clientSession) {
-        lobbyService.emitGlobalMessage(CommandFactory.USER_MESSAGE(socketCommand.getServerReceivedTime(), socketCommand.getClientName(), socketCommand.getClientId(), getMessageData(socketCommand)));
+        lobbyService.emitGlobalMessage(CommandFactory.USER_MESSAGE(socketCommand.getServerReceivedTime(), socketCommand.getUserName(), socketCommand.getUserId(), getMessageData(socketCommand)));
     }
 
 }

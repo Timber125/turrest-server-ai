@@ -14,13 +14,11 @@ public class ConnectionCommand extends ClientToServerCommand {
     public static final ServerSocketSubject SUBJECT = ServerSocketSubject.SOCKET_CONNECT;
     public static final String ACCESS_TOKEN = "token";
     public static final String USER_ID = "userid";
-    public static final String TAB_ID = "tabid";
 
-    public ConnectionCommand(String token, UUID clientID, String tabId) {
+    public ConnectionCommand(String token, UUID userId) {
         super(ServerSocketSubject.SOCKET_CONNECT, "LOGIN", new HashMap<>());
         data.put(ACCESS_TOKEN, token);
-        data.put(USER_ID, clientID);
-        data.put(TAB_ID, tabId);
+        data.put(USER_ID, userId);
     }
 
     public ConnectionCommand(Map<String, Object> data) {
@@ -35,10 +33,5 @@ public class ConnectionCommand extends ClientToServerCommand {
     @JsonIgnore
     public UUID getUserID() {
         return UUID.fromString(data.get(USER_ID).toString());
-    }
-
-    @JsonIgnore
-    public String getTabID() {
-        return data.getOrDefault(TAB_ID, "default").toString();
     }
 }

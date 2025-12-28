@@ -23,7 +23,8 @@ import java.util.*;
 public class LobbyService implements SocketConnectionAcceptor {
 
     private static final Logger LOG = LoggerFactory.getLogger(LobbyService.class);
-    private final Map<String, ClientSession> identifiedClients;
+    // Simplified: one session per user (userId -> session)
+    private final Map<UUID, ClientSession> identifiedClients;
     private final List<ClientSession> unidentifiedClients;
     private final Map<UUID, Lobby> lobbyHosts;
 
@@ -37,13 +38,9 @@ public class LobbyService implements SocketConnectionAcceptor {
         return lobbyHosts.get(lobbyID);
     }
 
-    private String getSessionKey(UUID userId, String tabId) {
-        return userId + ":" + (tabId != null ? tabId : "default");
-    }
-
     public boolean createLobby(SecuredClientToServerCommand<CreateLobbyCommand> command) {
-        UUID hostID = command.getClientId();
-        String hostName = command.getClientName();
+        UUID hostID = command.getUserId();
+        String hostName = command.getUserName();
         Lobby proposedLobby = new Lobby(hostID, hostName, command.getCommand().getSize(), command.getCommand().isHidden(),
                 command.getCommand().getGame());
         // Remove host from other lobbies
@@ -54,8 +51,8 @@ public class LobbyService implements SocketConnectionAcceptor {
 
     public Lobby joinLobby(SecuredClientToServerCommand<JoinLobbyCommand> command) {
         if (lobbyExists(command.getCommand().getLobbyId())) {
-            if (!clientIsPartOfLobby(command.getCommand().getLobbyId(), command.getClientId())) {
-                lobbyHosts.get(command.getCommand().getLobbyId()).addClient(command.getClientId(), command.getClientName());
+            if (!clientIsPartOfLobby(command.getCommand().getLobbyId(), command.getUserId())) {
+                lobbyHosts.get(command.getCommand().getLobbyId()).addClient(command.getUserId(), command.getUserName());
                 return lobbyHosts.get(command.getCommand().getLobbyId());
             }
         }
@@ -84,23 +81,33 @@ public class LobbyService implements SocketConnectionAcceptor {
     }
 
     public void handleLogin(UUID userId, ClientSession clientSession) {
-        identifiedClients.put(getSessionKey(userId, clientSession.getTabId()), clientSession);
+        // One session per user - new login replaces old
+        identifiedClients.put(userId, clientSession);
         unidentifiedClients.remove(clientSession);
         emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(),
-                clientSession.getClientName() + " Logged in."));
+                clientSession.getUserName() + " Logged in."));
+    }
+
+    /**
+     * Remove a client session (e.g., when kicking old session on new login).
+     */
+    public void removeClient(UUID userId) {
+        identifiedClients.remove(userId);
     }
 
     private Runnable onClose(ClientSession clientSession) {
         return () -> {
             unidentifiedClients.remove(clientSession);
-            UUID clientID = clientSession.getClientID();
-            if (clientID != null) {
-                ClientSession removed = identifiedClients.remove(getSessionKey(clientID, clientSession.getTabId()));
-                removeLobbyHostForUser(clientID);
-                removeUserFromAllLobbies(clientID);
-                if (removed != null) {
+            UUID userId = clientSession.getUserId();
+            if (userId != null) {
+                // Only remove if this is still the active session for this user
+                ClientSession current = identifiedClients.get(userId);
+                if (current == clientSession) {
+                    identifiedClients.remove(userId);
+                    removeLobbyHostForUser(userId);
+                    removeUserFromAllLobbies(userId);
                     emitGlobalMessage(CommandFactory.TIMED_SERVER_MESSAGE(LocalDateTime.now(),
-                            removed.getUserIdentifiedClientName() + " Disconnected."));
+                            clientSession.getUserIdentifiedClientName() + " Disconnected."));
                 }
             }
         };
@@ -135,7 +142,7 @@ public class LobbyService implements SocketConnectionAcceptor {
         if (lobby != null) {
             lobby.getPlayerIds().forEach(playerId -> {
                 identifiedClients.values().stream()
-                        .filter(session -> playerId.equals(session.getClientID()))
+                        .filter(session -> playerId.equals(session.getUserId()))
                         .forEach(session -> session.sendMessage(message));
             });
         }
@@ -146,7 +153,7 @@ public class LobbyService implements SocketConnectionAcceptor {
         if (lobby != null) {
             lobby.getPlayerIds().forEach(playerId -> {
                 identifiedClients.values().stream()
-                        .filter(session -> playerId.equals(session.getClientID()))
+                        .filter(session -> playerId.equals(session.getUserId()))
                         .forEach(session -> session.sendCommand(serverToClientCommand));
             });
         }
@@ -158,11 +165,7 @@ public class LobbyService implements SocketConnectionAcceptor {
             List<ClientSession> sessions = new ArrayList<>();
             // Iterate in lobby player order to preserve player number assignment
             for (UUID playerId : lobby.getPlayerIds()) {
-                // Find exactly one session per player (first matching session)
-                ClientSession session = identifiedClients.values().stream()
-                        .filter(s -> playerId.equals(s.getClientID()))
-                        .findFirst()
-                        .orElse(null);
+                ClientSession session = identifiedClients.get(playerId);
                 if (session != null) {
                     sessions.add(session);
                 }
@@ -180,9 +183,6 @@ public class LobbyService implements SocketConnectionAcceptor {
     }
 
     public ClientSession getClientSession(UUID playerId) {
-        return identifiedClients.values().stream()
-                .filter(session -> playerId.equals(session.getClientID()))
-                .findFirst()
-                .orElse(null);
+        return identifiedClients.get(playerId);
     }
 }

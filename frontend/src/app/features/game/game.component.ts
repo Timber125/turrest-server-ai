@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { LobbyService, SocketService, AuthService } from '../../core/services';
-import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS } from '../../shared/models';
+import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep } from '../../shared/models';
 import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
 import { TileInfoComponent } from './components/tile-info/tile-info.component';
@@ -35,6 +35,10 @@ import { Subscription } from 'rxjs';
           <button (click)="resetView()">Reset</button>
         </div>
         <div class="user-info">
+          <div class="hp-display" [class.low-hp]="myHitpoints <= 5">
+            <span class="hp-icon">HP</span>
+            <span class="hp-value">{{ myHitpoints }}</span>
+          </div>
           <div class="player-color-indicator" [style.background-color]="getMyPlayerColor()">
             <span class="player-number">P{{ myPlayerNumber }}</span>
           </div>
@@ -70,6 +74,12 @@ import { Subscription } from 'rxjs';
             }
             @if (errorMessage) {
               <div class="error-toast">{{ errorMessage }}</div>
+            }
+            @if (gameOver) {
+              <div class="game-overlay game-over-overlay">
+                <h2>{{ gameOverMessage }}</h2>
+                <button class="btn-back-to-lobby" (click)="leaveGame()">Back to Lobby</button>
+              </div>
             }
           </div>
 
@@ -186,6 +196,41 @@ import { Subscription } from 'rxjs';
       font-size: 0.9rem;
     }
 
+    .hp-display {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: #333;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      border: 2px solid #4CAF50;
+    }
+
+    .hp-display.low-hp {
+      border-color: #F44336;
+      animation: pulse-red 1s infinite;
+    }
+
+    @keyframes pulse-red {
+      0%, 100% { background: #333; }
+      50% { background: rgba(244, 67, 54, 0.3); }
+    }
+
+    .hp-icon {
+      color: #4CAF50;
+      font-weight: bold;
+      font-size: 0.7rem;
+    }
+
+    .hp-display.low-hp .hp-icon {
+      color: #F44336;
+    }
+
+    .hp-value {
+      font-weight: bold;
+      font-size: 1rem;
+    }
+
     .player-color-indicator {
       width: 36px;
       height: 36px;
@@ -264,6 +309,35 @@ import { Subscription } from 'rxjs';
       font-style: italic;
     }
 
+    .game-over-overlay {
+      background: rgba(0, 0, 0, 0.85);
+      padding: 2rem;
+      border-radius: 12px;
+      border: 2px solid #00d9ff;
+      pointer-events: all;
+    }
+
+    .game-over-overlay h2 {
+      color: #00d9ff;
+      font-size: 1.8rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .btn-back-to-lobby {
+      padding: 0.75rem 1.5rem;
+      background: #00d9ff;
+      border: none;
+      color: #000;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+    }
+
+    .btn-back-to-lobby:hover {
+      background: #00b8d9;
+    }
+
     .error-toast {
       position: absolute;
       top: 20px;
@@ -339,7 +413,15 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   // Player info
   myPlayerNumber = 0;  // Set from server on game start
   myColorIndex = 0;    // Color index from lobby selection
+  myHitpoints = 20;    // Player hitpoints
   playerColorMap: Map<number, number> = new Map(); // playerNumber -> colorIndex
+
+  // Creeps
+  creeps: Map<string, Creep> = new Map();
+  gameOver = false;
+  gameOverMessage = '';
+  private lastFrameTime = 0;
+  private animationFrameId: number | null = null;
 
   // Placement mode
   placementMode: BuildingDefinition | null = null;
@@ -400,7 +482,8 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     public lobbyService: LobbyService,
     public authService: AuthService,
     private socketService: SocketService,
-    private router: Router
+    private router: Router,
+    private ngZone: NgZone
   ) { }
 
   ngOnInit(): void {
@@ -420,10 +503,10 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     this.subscriptions.push(tileSub);
 
-    // Listen for resource updates
+    // Listen for resource updates - run in NgZone to trigger change detection
     const resourceSub = this.socketService.onCommand('GAME', 'RESOURCE_UPDATE')
       .subscribe(cmd => {
-        this.handleResourceUpdate(cmd.data);
+        this.ngZone.run(() => this.handleResourceUpdate(cmd.data));
       });
     this.subscriptions.push(resourceSub);
 
@@ -465,6 +548,41 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         this.handleFullMap(cmd.data);
       });
     this.subscriptions.push(fullMapSub);
+
+    // Listen for creep spawn
+    const spawnCreepSub = this.socketService.onCommand('GAME', 'SPAWN_CREEP')
+      .subscribe(cmd => {
+        this.handleSpawnCreep(cmd.data);
+      });
+    this.subscriptions.push(spawnCreepSub);
+
+    // Listen for creep update
+    const updateCreepSub = this.socketService.onCommand('GAME', 'UPDATE_CREEP')
+      .subscribe(cmd => {
+        this.handleUpdateCreep(cmd.data);
+      });
+    this.subscriptions.push(updateCreepSub);
+
+    // Listen for creep despawn
+    const despawnCreepSub = this.socketService.onCommand('GAME', 'DESPAWN_CREEP')
+      .subscribe(cmd => {
+        this.handleDespawnCreep(cmd.data);
+      });
+    this.subscriptions.push(despawnCreepSub);
+
+    // Listen for player damage - run in NgZone to trigger change detection
+    const damageSub = this.socketService.onCommand('GAME', 'PLAYER_TAKES_DAMAGE')
+      .subscribe(cmd => {
+        this.ngZone.run(() => this.handlePlayerDamage(cmd.data));
+      });
+    this.subscriptions.push(damageSub);
+
+    // Listen for game over - run in NgZone to trigger change detection
+    const gameOverSub = this.socketService.onCommand('GAME', 'GAME_OVER')
+      .subscribe(cmd => {
+        this.ngZone.run(() => this.handleGameOver(cmd.data));
+      });
+    this.subscriptions.push(gameOverSub);
   }
 
   private showError(message: string): void {
@@ -491,9 +609,45 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.resizeCanvas();
     this.loadRoadImages();
-    this.render();
+    this.startAnimationLoop();
 
     window.addEventListener('resize', () => this.onResize());
+  }
+
+  private startAnimationLoop(): void {
+    const animate = (timestamp: number) => {
+      const deltaTime = this.lastFrameTime > 0
+        ? (timestamp - this.lastFrameTime) / 1000
+        : 0;
+      this.lastFrameTime = timestamp;
+
+      this.updateCreepPositions(deltaTime);
+      this.render();
+
+      this.animationFrameId = requestAnimationFrame(animate);
+    };
+    this.animationFrameId = requestAnimationFrame(animate);
+  }
+
+  private updateCreepPositions(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    for (const creep of this.creeps.values()) {
+      const dx = creep.targetX - creep.x;
+      const dy = creep.targetY - creep.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance > 0.01) {
+        const moveDistance = creep.speed * deltaTime;
+        const ratio = Math.min(moveDistance / distance, 1);
+        creep.x += dx * ratio;
+        creep.y += dy * ratio;
+      } else {
+        // Snap to target when very close
+        creep.x = creep.targetX;
+        creep.y = creep.targetY;
+      }
+    }
   }
 
   private loadRoadImages(): void {
@@ -525,6 +679,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
     window.removeEventListener('resize', () => this.onResize());
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
   }
 
   @HostListener('window:resize')
@@ -679,6 +836,71 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.render();
   }
 
+  private handleSpawnCreep(data: Record<string, any>): void {
+    const x = data['x'] as number;
+    const y = data['y'] as number;
+    const creep: Creep = {
+      id: data['creepId'] as string,
+      creepType: data['creepType'] as string,
+      x: x,
+      y: y,
+      targetX: x,
+      targetY: y,
+      playerNumber: data['playerNumber'] as number,
+      hitpoints: data['hitpoints'] as number,
+      maxHitpoints: data['maxHitpoints'] as number,
+      speed: data['speed'] as number || 0.33
+    };
+    this.creeps.set(creep.id, creep);
+    console.log('Spawned creep:', creep.id, 'at', creep.x, creep.y, 'speed:', creep.speed);
+  }
+
+  private handleUpdateCreep(data: Record<string, any>): void {
+    const creepId = data['creepId'] as string;
+    const creep = this.creeps.get(creepId);
+    if (creep) {
+      // Set target position for interpolation (don't jump immediately)
+      creep.targetX = data['x'] as number;
+      creep.targetY = data['y'] as number;
+      creep.hitpoints = data['hitpoints'] as number;
+    }
+  }
+
+  private handleDespawnCreep(data: Record<string, any>): void {
+    const creepId = data['creepId'] as string;
+    this.creeps.delete(creepId);
+    console.log('Despawned creep:', creepId);
+    this.render();
+  }
+
+  private handlePlayerDamage(data: Record<string, any>): void {
+    const playerNumber = data['playerNumber'] as number;
+    const damage = data['damage'] as number;
+    const remainingHitpoints = data['remainingHitpoints'] as number;
+
+    if (playerNumber === this.myPlayerNumber) {
+      this.myHitpoints = remainingHitpoints;
+      console.log(`Took ${damage} damage! HP: ${remainingHitpoints}`);
+    }
+  }
+
+  private handleGameOver(data: Record<string, any>): void {
+    const playerNumber = data['playerNumber'] as number;
+    const isWinner = data['isWinner'] as boolean;
+
+    if (isWinner) {
+      this.gameOver = true;
+      if (playerNumber === this.myPlayerNumber) {
+        this.gameOverMessage = 'Victory! You are the last player standing!';
+      } else {
+        this.gameOverMessage = `Player ${playerNumber} wins!`;
+      }
+    } else if (playerNumber === this.myPlayerNumber) {
+      this.gameOver = true;
+      this.gameOverMessage = 'Game Over - Your castle has fallen!';
+    }
+  }
+
   private render(): void {
     const canvas = this.canvasRef.nativeElement;
     const ctx = this.ctx;
@@ -702,6 +924,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.drawGrid();
 
+    // Draw creeps
+    this.drawCreeps();
+
     if (this.selectedTile) {
       this.drawSelection();
     }
@@ -709,6 +934,61 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     // Draw placement preview
     if (this.placementMode && this.hoverTileX >= 0 && this.hoverTileY >= 0) {
       this.drawPlacementPreview();
+    }
+  }
+
+  private drawCreeps(): void {
+    for (const creep of this.creeps.values()) {
+      const screenX = creep.x * this.tileSize - this.cameraX;
+      const screenY = creep.y * this.tileSize - this.cameraY;
+
+      // Skip if off-screen
+      const canvas = this.canvasRef.nativeElement;
+      if (screenX < -this.tileSize || screenX > canvas.width ||
+          screenY < -this.tileSize || screenY > canvas.height) {
+        continue;
+      }
+
+      const size = this.tileSize * 0.6;
+      const centerX = screenX + this.tileSize / 2;
+      const centerY = screenY + this.tileSize / 2;
+
+      // Get color for this creep's target player
+      const colorIndex = this.playerColorMap.get(creep.playerNumber) ?? creep.playerNumber;
+      const playerColor = getPlayerColor(colorIndex);
+
+      // Draw creep body (circle)
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = creep.creepType === 'TROLL' ? '#5a4a3a' : '#9090c0';
+      this.ctx.fill();
+      this.ctx.strokeStyle = playerColor;
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+
+      // Draw health bar
+      const hpBarWidth = size;
+      const hpBarHeight = 4;
+      const hpBarX = centerX - hpBarWidth / 2;
+      const hpBarY = screenY + 2;
+      const hpPercent = creep.hitpoints / creep.maxHitpoints;
+
+      // Background
+      this.ctx.fillStyle = '#333';
+      this.ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
+
+      // Health
+      const hpColor = hpPercent > 0.5 ? '#4CAF50' : hpPercent > 0.25 ? '#FFC107' : '#F44336';
+      this.ctx.fillStyle = hpColor;
+      this.ctx.fillRect(hpBarX, hpBarY, hpBarWidth * hpPercent, hpBarHeight);
+
+      // Draw creep icon
+      this.ctx.font = `${size * 0.6}px Arial`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillStyle = '#fff';
+      const icon = creep.creepType === 'TROLL' ? '!' : '?';
+      this.ctx.fillText(icon, centerX, centerY);
     }
   }
 
@@ -908,9 +1188,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Mouse event handlers for panning
   onMouseDown(event: MouseEvent): void {
+    this.hasDragged = false; // Always reset drag state on mouse down
     if (this.placementMode) return; // Don't drag in placement mode
     this.isDragging = true;
-    this.hasDragged = false;
     this.lastMouseX = event.clientX;
     this.lastMouseY = event.clientY;
   }

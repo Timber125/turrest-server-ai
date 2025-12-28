@@ -17,7 +17,8 @@ public class GameService {
 
     private static final Logger LOG = LoggerFactory.getLogger(GameService.class);
     private final Map<UUID, Game<?>> games;
-    private final Map<String, UUID> playerActiveGame;
+    // Simplified: userId -> gameId (one session per user)
+    private final Map<UUID, UUID> playerActiveGame;
     private final LobbyService lobbyService;
 
     public GameService(LobbyService lobbyService) {
@@ -40,9 +41,8 @@ public class GameService {
         games.put(game.getGameID(), game);
 
         for (ClientSession session : lobbyPlayers) {
-            if (session.getClientID() != null) {
-                String sessionKey = session.getClientID() + ":" + session.getTabId();
-                playerActiveGame.put(sessionKey, game.getGameID());
+            if (session.getUserId() != null) {
+                playerActiveGame.put(session.getUserId(), game.getGameID());
             }
         }
 
@@ -58,22 +58,22 @@ public class GameService {
     }
 
     /**
-     * Gets the game a player is currently in by their session key.
+     * Gets the game a player is currently in by their userId.
      */
-    public Game<?> getGameBySessionKey(String sessionKey) {
-        UUID gameId = playerActiveGame.get(sessionKey);
+    public Game<?> getGameByUserId(UUID userId) {
+        UUID gameId = playerActiveGame.get(userId);
         if (gameId != null) {
             return games.get(gameId);
         }
         return null;
     }
 
-    public boolean isPlayerInGame(String sessionKey) {
-        return playerActiveGame.containsKey(sessionKey);
+    public boolean isPlayerInGame(UUID userId) {
+        return playerActiveGame.containsKey(userId);
     }
 
-    public void handlePlayerDisconnect(String sessionKey, UUID userId) {
-        UUID gameId = playerActiveGame.get(sessionKey);
+    public void handlePlayerDisconnect(UUID userId) {
+        UUID gameId = playerActiveGame.get(userId);
         if (gameId != null) {
             Game<?> game = games.get(gameId);
             if (game != null) {
@@ -82,22 +82,22 @@ public class GameService {
         }
     }
 
-    public void reconnectPlayer(String sessionKey, ClientSession newSession) {
-        UUID gameId = playerActiveGame.get(sessionKey);
+    public void reconnectPlayer(UUID userId, ClientSession newSession) {
+        UUID gameId = playerActiveGame.get(userId);
         if (gameId != null) {
             Game<?> game = games.get(gameId);
             if (game != null) {
-                LOG.info(" reconnecting session {} to game {}", sessionKey, gameId);
-                game.reconnectPlayer(newSession.getClientID(), newSession);
+                LOG.info("Reconnecting user {} to game {}", userId, gameId);
+                game.reconnectPlayer(userId, newSession);
             } else {
-                LOG.warn("Session {} tried to reconnect to game {} but game instance not found", sessionKey, gameId);
-                playerActiveGame.remove(sessionKey); // Cleanup orphan
+                LOG.warn("User {} tried to reconnect to game {} but game instance not found", userId, gameId);
+                playerActiveGame.remove(userId); // Cleanup orphan
             }
         }
     }
 
-    public void unregisterPlayer(String sessionKey) {
-        playerActiveGame.remove(sessionKey);
+    public void unregisterPlayer(UUID userId) {
+        playerActiveGame.remove(userId);
     }
 
     public void cleanupGame(UUID gameId) {

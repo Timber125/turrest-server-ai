@@ -78,3 +78,16 @@ export interface GamePlayer {
   name: string;
   playerNumber: number;
 }
+
+export interface Creep {
+  id: string;
+  creepType: string;
+  x: number;              // Current rendered position (interpolated)
+  y: number;
+  targetX: number;        // Server-sent position (destination)
+  targetY: number;
+  playerNumber: number;
+  hitpoints: number;
+  maxHitpoints: number;
+  speed: number;          // Tiles per second
+}

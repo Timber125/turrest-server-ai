@@ -48,22 +48,29 @@ public class ConnectionHandler extends CommandHandler<ConnectionCommand> {
     public void accept(SecuredClientToServerCommand<ConnectionCommand> command, ClientSession clientSession) {
         String token = getToken(command);
         UUID userId = getUserID(command);
-        String tabId = command.getCommand().getTabID();
 
         boolean authenticateSuccess = fakeKeycloak.useAccessToken(token, userId);
         if (authenticateSuccess) {
-            LOG.info("Authentication success for user {} tab {}", userId, tabId);
-            clientSession.authenticate(userProfileService, userId);
-            clientSession.setTabId(tabId);
+            LOG.info("Authentication success for user {}", userId);
 
-            String sessionKey = userId + ":" + tabId;
-            if (gameService.isPlayerInGame(sessionKey)) {
-                LOG.info("Session {} found in active game, reconnecting...", sessionKey);
+            // Kick existing session for this user (single session per user)
+            ClientSession existingSession = lobbyService.getClientSession(userId);
+            if (existingSession != null) {
+                LOG.info("Kicking existing session for user {} due to new login", userId);
+                existingSession.sendCommand(new DisplayChatCommand("You have been disconnected due to login from another location."));
+                existingSession.close();
+                lobbyService.removeClient(userId);
+            }
+
+            clientSession.authenticate(userProfileService, userId);
+
+            if (gameService.isPlayerInGame(userId)) {
+                LOG.info("User {} found in active game, reconnecting...", userId);
                 clientSession.sendCommand(new DisplayChatCommand("Reconnecting to ongoing game..."));
-                gameService.reconnectPlayer(sessionKey, clientSession);
+                gameService.reconnectPlayer(userId, clientSession);
             } else {
                 clientSession.sendCommand(
-                        new DisplayChatCommand("Login successful - Welcome " + clientSession.getClientName()));
+                        new DisplayChatCommand("Login successful - Welcome " + clientSession.getUserName()));
                 lobbyService.handleLogin(userId, clientSession);
             }
         } else {

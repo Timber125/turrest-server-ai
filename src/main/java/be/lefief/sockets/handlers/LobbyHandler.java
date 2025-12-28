@@ -45,11 +45,11 @@ public class LobbyHandler {
         CreateLobbyCommand createLobbyCommand = new CreateLobbyCommand(socketCommand.getCommand());
         boolean success = lobbyService.createLobby(socketCommand);
         if (success) {
-            clientSession.sendCommand(new LobbyCreatedResponse(socketCommand.getClientId(),
+            clientSession.sendCommand(new LobbyCreatedResponse(socketCommand.getUserId(),
                     createLobbyCommand.getSize(), createLobbyCommand.isHidden(), createLobbyCommand.getPassword(),
                     createLobbyCommand.getGame()));
             // Send lobby state with player list
-            Lobby lobby = lobbyService.getLobby(socketCommand.getClientId());
+            Lobby lobby = lobbyService.getLobby(socketCommand.getUserId());
             if (lobby != null) {
                 clientSession.sendCommand(new LobbyStateResponse(lobby));
             }
@@ -69,7 +69,7 @@ public class LobbyHandler {
 
     public void handleStartLobbyGame(SecuredClientToServerCommand<StartLobbyGameCommand> socketCommand,
             ClientSession clientSession) {
-        Lobby connectedLobby = lobbyService.getLobby(socketCommand.getClientId());
+        Lobby connectedLobby = lobbyService.getLobby(socketCommand.getUserId());
         if (connectedLobby != null) {
             // Check if all players are ready before starting
             if (!connectedLobby.allPlayersReady()) {
@@ -79,7 +79,7 @@ public class LobbyHandler {
 
             connectedLobby.start();
             lobbyService.emitLobbyMessage(connectedLobby.getLobbyID(),
-                    String.format("%s started the game!", clientSession.getClientName()));
+                    String.format("%s started the game!", clientSession.getUserName()));
             lobbyService.emitLobbyCommand(connectedLobby.getLobbyID(), new GameStartedResponse());
 
             // Build color map from lobby players
@@ -96,7 +96,7 @@ public class LobbyHandler {
 
     public void handleChangeColor(SecuredClientToServerCommand<ChangeColorCommand> socketCommand,
             ClientSession clientSession) {
-        Lobby lobby = lobbyService.findLobbyByPlayer(socketCommand.getClientId());
+        Lobby lobby = lobbyService.findLobbyByPlayer(socketCommand.getUserId());
         if (lobby == null) {
             clientSession.sendCommand(new ErrorMessageResponse("You are not in a lobby"));
             return;
@@ -108,7 +108,7 @@ public class LobbyHandler {
             return;
         }
 
-        boolean success = lobby.changePlayerColor(socketCommand.getClientId(), newColorIndex);
+        boolean success = lobby.changePlayerColor(socketCommand.getUserId(), newColorIndex);
         if (!success) {
             clientSession.sendCommand(new ErrorMessageResponse("Color already taken or you are ready"));
             return;
@@ -120,13 +120,13 @@ public class LobbyHandler {
 
     public void handleToggleReady(SecuredClientToServerCommand<ToggleReadyCommand> socketCommand,
             ClientSession clientSession) {
-        Lobby lobby = lobbyService.findLobbyByPlayer(socketCommand.getClientId());
+        Lobby lobby = lobbyService.findLobbyByPlayer(socketCommand.getUserId());
         if (lobby == null) {
             clientSession.sendCommand(new ErrorMessageResponse("You are not in a lobby"));
             return;
         }
 
-        boolean success = lobby.togglePlayerReady(socketCommand.getClientId());
+        boolean success = lobby.togglePlayerReady(socketCommand.getUserId());
         if (!success) {
             clientSession.sendCommand(new ErrorMessageResponse("Could not toggle ready state"));
             return;

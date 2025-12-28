@@ -5,11 +5,15 @@ import be.lefief.game.map.GameMap;
 import be.lefief.game.map.LevelLoader;
 import be.lefief.game.map.Tile;
 import be.lefief.game.turrest01.commands.FullMapResponse;
+import be.lefief.game.turrest01.commands.GameOverCommand;
 import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
 import be.lefief.game.turrest01.commands.TileUpdateResponse;
+import be.lefief.game.turrest01.creep.CreepManager;
 import be.lefief.game.turrest01.map.RoadGenerator;
 import be.lefief.game.turrest01.resource.PlayerResources;
 import be.lefief.game.turrest01.structure.Road;
+import be.lefief.game.turrest01.wave.Wave;
+import be.lefief.game.turrest01.wave.WaveLoader;
 import be.lefief.sockets.ClientSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,9 +33,12 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
 
     private static final Logger LOG = LoggerFactory.getLogger(TurrestGameMode01.class);
     private static final String LEVEL_PATH = "levels/0001.level";
-    private static final int TICK_RATE_MS = 1000; // Game tick every second
+    private static final String LEVEL_NAME = "0001";
+    private static final int TICK_RATE_MS = 1000; // Game tick once per second
+    private static final double TICK_DURATION_SEC = TICK_RATE_MS / 1000.0;
 
     private GameMap gameMap;
+    private CreepManager creepManager;
     private ScheduledExecutorService gameLoop;
     private boolean running;
     private int tickCount = 0;
@@ -66,7 +73,12 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
             LOG.info("Created combined map {}x{} for {} players with {} roads per section",
                     gameMap.getWidth(), gameMap.getHeight(), playerCount, roadPositions.size());
 
-            // 4. Schedule game beginning after 5 seconds
+            // 4. Load waves and create CreepManager
+            List<Wave> waves = WaveLoader.load(LEVEL_NAME);
+            creepManager = new CreepManager(waves, gameMap, playerCount);
+            LOG.info("Loaded {} waves for creep spawning", waves.size());
+
+            // 5. Schedule game beginning after 5 seconds
             Executors.newSingleThreadScheduledExecutor().schedule(() -> {
                 if (isGameIsRunning()) {
                     LOG.info("Countdown finished, sending map and starting game loop");
@@ -158,9 +170,14 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         try {
             tickCount++;
 
-            // Process resource production for each player - no instanceof needed!
+            // Process creeps (spawn, move, damage)
+            if (creepManager != null) {
+                creepManager.tick(tickCount, this);
+            }
+
+            // Process resource production every tick (once per second with 1000ms tick rate)
             for (Turrest01Player player : getPlayerByNumber().values()) {
-                if (player.isConnected()) {
+                if (player.isConnected() && player.isAlive()) {
                     PlayerResources resources = player.getResources();
                     resources.addProduction();
 
@@ -173,11 +190,36 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
                 }
             }
 
-            if (tickCount % 10 == 0) {
-                LOG.debug("Game tick {} completed", tickCount);
+            if (tickCount % 5 == 0) {
+                LOG.debug("Game tick {} completed, active creeps: {}",
+                        tickCount, creepManager != null ? creepManager.getActiveCreepCount() : 0);
             }
         } catch (Exception e) {
             LOG.error("Error in game tick", e);
+        }
+    }
+
+    public void handlePlayerDeath(Turrest01Player player) {
+        LOG.info("Player {} has been eliminated!", player.getPlayerNumber());
+        broadcastToAllPlayers(new GameOverCommand(player.getPlayerNumber(), false));
+
+        // Check if game is over (only one player left)
+        long alivePlayers = getPlayerByNumber().values().stream()
+                .filter(Turrest01Player::isAlive)
+                .count();
+
+        if (alivePlayers <= 1) {
+            Turrest01Player winner = getPlayerByNumber().values().stream()
+                    .filter(Turrest01Player::isAlive)
+                    .findFirst()
+                    .orElse(null);
+
+            if (winner != null) {
+                LOG.info("Game over! Player {} wins!", winner.getPlayerNumber());
+                broadcastToAllPlayers(new GameOverCommand(winner.getPlayerNumber(), true));
+            }
+
+            stop();
         }
     }
 

@@ -24,12 +24,11 @@ public class GameLeaveListener extends CommandHandler<LeaveGameCommand> {
 
     @Override
     public void accept(SecuredClientToServerCommand<LeaveGameCommand> command, ClientSession clientSession) {
-        UUID userId = clientSession.getClientID();
+        UUID userId = clientSession.getUserId();
         if (userId != null) {
-            String sessionKey = userId + ":" + clientSession.getTabId();
-            LOG.info("Player {} is leaving the game explicitly from session {}", userId, sessionKey);
-            gameService.handlePlayerDisconnect(sessionKey, userId);
-            gameService.unregisterPlayer(sessionKey);
+            LOG.info("Player {} is leaving the game explicitly", userId);
+            gameService.handlePlayerDisconnect(userId);
+            gameService.unregisterPlayer(userId);
             // After unregistering, they are back in "lobby mode" logically for the server.
             // Client should probably navigate back.
         }

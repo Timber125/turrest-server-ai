@@ -24,14 +24,14 @@ public interface ClientSession {
     void sendMessage(String message);
 
     /**
-     * Get the client's UUID (null if not authenticated).
+     * Get the authenticated user's UUID (null if not authenticated).
      */
-    UUID getClientID();
+    UUID getUserId();
 
     /**
-     * Get the client's display name.
+     * Get the user's display name.
      */
-    String getClientName();
+    String getUserName();
 
     /**
      * Get formatted name with ID prefix.
@@ -41,12 +41,13 @@ public interface ClientSession {
     /**
      * Authenticate this session with a user.
      */
-    void authenticate(UserProfileService userProfileService, UUID clientId);
+    void authenticate(UserProfileService userProfileService, UUID userId);
 
     /**
      * Get the user data for authenticated sessions.
      */
     UserData getUserData();
+
 
     /**
      * Close this session.
@@ -67,8 +68,4 @@ public interface ClientSession {
      * Get a description of the remote address (for logging).
      */
     String getRemoteAddress();
-
-    String getTabId();
-
-    void setTabId(String tabId);
 }

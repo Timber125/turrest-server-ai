@@ -17,8 +17,8 @@ public class ChangeColorHandler extends CommandTopicHandler<ChangeColorCommand> 
     public SecuredClientToServerCommand<ChangeColorCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new ChangeColorCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

@@ -17,8 +17,8 @@ public class ToggleReadyHandler extends CommandTopicHandler<ToggleReadyCommand> 
     public SecuredClientToServerCommand<ToggleReadyCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new ToggleReadyCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

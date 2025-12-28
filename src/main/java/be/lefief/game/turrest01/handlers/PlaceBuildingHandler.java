@@ -18,8 +18,8 @@ public class PlaceBuildingHandler extends CommandTopicHandler<PlaceBuildingComma
     public SecuredClientToServerCommand<PlaceBuildingCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new PlaceBuildingCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

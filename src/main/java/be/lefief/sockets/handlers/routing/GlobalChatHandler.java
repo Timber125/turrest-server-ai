@@ -17,8 +17,8 @@ public class GlobalChatHandler extends CommandTopicHandler<GlobalChatCommand> {
     public SecuredClientToServerCommand<GlobalChatCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new GlobalChatCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

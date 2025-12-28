@@ -17,8 +17,8 @@ public class LobbyCreateHandler extends CommandTopicHandler<CreateLobbyCommand> 
     public SecuredClientToServerCommand<CreateLobbyCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new CreateLobbyCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

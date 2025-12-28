@@ -15,7 +15,7 @@ public class ClientCommandConsumer {
 
     public static Consumer<String> createCommandConsumer(ClientSession clientSession, CommandRouter commandRouter){
         return (message) -> {
-            LOG.info("Client {} @ {} sent: {}", Optional.ofNullable(clientSession.getClientID()).map(UUID::toString).orElse("<unauthenticated>"), clientSession.getRemoteAddress(), message);
+            LOG.info("Client {} @ {} sent: {}", Optional.ofNullable(clientSession.getUserId()).map(UUID::toString).orElse("<unauthenticated>"), clientSession.getRemoteAddress(), message);
             Optional.ofNullable(CommandSerializer.deserializeClientToServerCommand(message))
                     .ifPresent(deserializedCommand -> commandRouter.handle(deserializedCommand, clientSession));
         };

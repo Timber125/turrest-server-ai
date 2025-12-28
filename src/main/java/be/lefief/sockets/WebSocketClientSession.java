@@ -71,26 +71,26 @@ public class WebSocketClientSession implements ClientSession {
     }
 
     @Override
-    public UUID getClientID() {
+    public UUID getUserId() {
         return (userDataSupplier == null) ? null : userDataSupplier.get().getId();
     }
 
     @Override
-    public String getClientName() {
+    public String getUserName() {
         return getUserData().getName();
     }
 
     @Override
     public String getUserIdentifiedClientName() {
-        return String.format("%s(%s)", getClientName(), "#" + getClientID().toString().substring(0, 4));
+        return String.format("%s(%s)", getUserName(), "#" + getUserId().toString().substring(0, 4));
     }
 
     @Override
-    public void authenticate(UserProfileService userProfileService, UUID clientId) {
+    public void authenticate(UserProfileService userProfileService, UUID userId) {
         if (authTimeoutTask != null) {
             authTimeoutTask.cancel();
         }
-        userDataSupplier = () -> userProfileService.findByID(clientId)
+        userDataSupplier = () -> userProfileService.findByID(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
@@ -147,17 +147,5 @@ public class WebSocketClientSession implements ClientSession {
 
     public WebSocketSession getSession() {
         return session;
-    }
-
-    private String tabId;
-
-    @Override
-    public String getTabId() {
-        return tabId;
-    }
-
-    @Override
-    public void setTabId(String tabId) {
-        this.tabId = tabId;
     }
 }

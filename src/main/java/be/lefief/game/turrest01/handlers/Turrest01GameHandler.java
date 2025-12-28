@@ -15,6 +15,8 @@ import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
 import be.lefief.sockets.commands.client.reception.ErrorMessageResponse;
 import org.slf4j.Logger;
+
+import java.util.UUID;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
@@ -34,15 +36,15 @@ public class Turrest01GameHandler {
         int y = placeCommand.getY();
         int buildingTypeId = placeCommand.getBuildingType();
 
-        LOG.info("Player {} attempting to place building type {} at ({}, {})",
-                command.getClientName(), buildingTypeId, x, y);
+        UUID userId = clientSession.getUserId();
+        LOG.info("[BUILD DEBUG] Player '{}' (userId={}) attempting to place building type {} at ({}, {})",
+                command.getUserName(), userId, buildingTypeId, x, y);
 
         // Get the game for this player
-        String sessionKey = clientSession.getClientID() + ":" + clientSession.getTabId();
-        Game<?> game = gameService.getGameBySessionKey(sessionKey);
+        Game<?> game = gameService.getGameByUserId(userId);
 
         if (game == null) {
-            LOG.warn("No game found for session {}", sessionKey);
+            LOG.warn("No game found for user {}", userId);
             clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
             return;
         }
@@ -54,12 +56,20 @@ public class Turrest01GameHandler {
         }
 
         // Find the player
+        LOG.debug("[BUILD DEBUG] Game has {} players: {}",
+                turrestGame.getPlayerByNumber().size(),
+                turrestGame.getPlayerByNumber().keySet());
         Turrest01Player player = findPlayerBySession(turrestGame, clientSession);
         if (player == null) {
-            LOG.warn("Could not find player for session");
+            LOG.warn("[BUILD DEBUG] Could not find player for session userId={}, game players: {}",
+                    userId, turrestGame.getPlayerByNumber().values().stream()
+                            .map(p -> "Player" + p.getPlayerNumber() + "(clientID=" +
+                                    (p.getClientSession() != null ? p.getClientSession().getUserId() : "null") + ")")
+                            .toList());
             clientSession.sendCommand(new ErrorMessageResponse("Player not found"));
             return;
         }
+        LOG.info("[BUILD DEBUG] Found player {} for userId={}", player.getPlayerNumber(), userId);
 
         // Get building definition
         BuildingDefinition buildingDef = BuildingDefinition.fromId(buildingTypeId);
@@ -130,15 +140,19 @@ public class Turrest01GameHandler {
     }
 
     private Turrest01Player findPlayerBySession(TurrestGameMode01 game, ClientSession session) {
-        // Match by clientID only - tabId can differ if user switches tabs
+        UUID lookingFor = session.getUserId();
+        LOG.debug("[BUILD DEBUG] Looking for player with clientID={}", lookingFor);
         for (Turrest01Player player : game.getPlayerByNumber().values()) {
             ClientSession playerSession = player.getClientSession();
-            if (playerSession != null &&
-                session.getClientID().equals(playerSession.getClientID())) {
+            UUID playerId = playerSession != null ? playerSession.getUserId() : null;
+            LOG.debug("[BUILD DEBUG] Checking player {} - userId={}, match={}",
+                    player.getPlayerNumber(), playerId,
+                    playerId != null && playerId.equals(lookingFor));
+            if (playerSession != null && lookingFor.equals(playerId)) {
                 return player;
             }
         }
-        LOG.warn("No player found for session clientID={}", session.getClientID());
+        LOG.warn("[BUILD DEBUG] No player found for session clientID={}", lookingFor);
         return null;
     }
 }

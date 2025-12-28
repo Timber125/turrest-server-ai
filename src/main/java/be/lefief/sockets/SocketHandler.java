@@ -67,7 +67,7 @@ public class SocketHandler implements ClientSession {
             }
             close();
         } catch (IOException e) {
-            LOG.error("Client {} disconnected", getClientID());
+            LOG.error("Client {} disconnected", getUserId());
             close(); // ?
         }
     }
@@ -121,7 +121,7 @@ public class SocketHandler implements ClientSession {
     }
 
     @Override
-    public UUID getClientID() {
+    public UUID getUserId() {
         return (userDataSupplier == null) ? null : userDataSupplier.get().getId();
     }
 
@@ -139,21 +139,21 @@ public class SocketHandler implements ClientSession {
     }
 
     @Override
-    public String getClientName() {
+    public String getUserName() {
         return getUserData().getName();
     }
 
     @Override
     public String getUserIdentifiedClientName() {
-        return String.format("%s(%s)", getClientName(), "#" + getClientID().toString().substring(0, 4));
+        return String.format("%s(%s)", getUserName(), "#" + getUserId().toString().substring(0, 4));
     }
 
     @Override
-    public void authenticate(UserProfileService userProfileService, UUID clientId) {
+    public void authenticate(UserProfileService userProfileService, UUID userId) {
         if (authTimeoutTask != null) {
             authTimeoutTask.cancel();
         }
-        userDataSupplier = () -> userProfileService.findByID(clientId)
+        userDataSupplier = () -> userProfileService.findByID(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found"));
     }
 
@@ -165,17 +165,5 @@ public class SocketHandler implements ClientSession {
     @Override
     public String getRemoteAddress() {
         return clientSocket.getInetAddress().toString();
-    }
-
-    private String tabId;
-
-    @Override
-    public String getTabId() {
-        return tabId;
-    }
-
-    @Override
-    public void setTabId(String tabId) {
-        this.tabId = tabId;
     }
 }

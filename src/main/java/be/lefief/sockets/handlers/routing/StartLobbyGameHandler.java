@@ -18,8 +18,8 @@ public class StartLobbyGameHandler extends CommandTopicHandler<StartLobbyGameCom
     public SecuredClientToServerCommand<StartLobbyGameCommand> identify(ClientToServerCommand command, ClientSession clientSession) {
         return new SecuredClientToServerCommand<>(
                 new StartLobbyGameCommand(command.getData()),
-                clientSession.getClientID(),
-                clientSession.getClientName()
+                clientSession.getUserId(),
+                clientSession.getUserName()
         );
     }
 }

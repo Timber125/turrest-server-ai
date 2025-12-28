@@ -38,7 +38,7 @@ public abstract class Game<T extends Player> {
         this.communicationPool = Executors.newFixedThreadPool(COMMUNICATION_POOL_SIZE);
         for (int i = 0; i < players.size(); i++) {
             ClientSession session = players.get(i);
-            int colorIndex = playerColorMap.getOrDefault(session.getClientID(), i);
+            int colorIndex = playerColorMap.getOrDefault(session.getUserId(), i);
             playerByNumber.put(i, createPlayer(session, i, gameID, colorIndex));
         }
     }
@@ -62,13 +62,12 @@ public abstract class Game<T extends Player> {
 
     public void sendToPlayer(T player, ServerToClientCommand command) {
         if (player.isConnected() && player.getClientSession() != null) {
-            communicationPool.submit(() -> {
-                try {
-                    player.getClientSession().sendCommand(command);
-                } catch (Exception e) {
-                    LOG.error("Failed to send command to player {}", player.getPlayerNumber(), e);
-                }
-            });
+            // Send directly - ClientSession already handles threading
+            try {
+                player.getClientSession().sendCommand(command);
+            } catch (Exception e) {
+                LOG.error("Failed to send command to player {}", player.getPlayerNumber(), e);
+            }
         }
     }
 
@@ -88,7 +87,7 @@ public abstract class Game<T extends Player> {
     public void reconnectPlayer(UUID userId, ClientSession newSession) {
         for (T player : playerByNumber.values()) {
             ClientSession oldSession = player.getClientSession();
-            if (oldSession != null && userId.equals(oldSession.getClientID())) {
+            if (oldSession != null && userId.equals(oldSession.getUserId())) {
                 player.setClientSession(newSession);
                 player.setConnected(true);
                 resyncPlayer(player);
@@ -99,7 +98,7 @@ public abstract class Game<T extends Player> {
 
     public void handlePlayerDisconnect(UUID userId) {
         for (T player : playerByNumber.values()) {
-            if (player.getClientSession() != null && userId.equals(player.getClientSession().getClientID())) {
+            if (player.getClientSession() != null && userId.equals(player.getClientSession().getUserId())) {
                 player.setConnected(false);
             }
         }
@@ -117,7 +116,7 @@ public abstract class Game<T extends Player> {
                 if (winner != null) {
                     gameIsRunning = false;
                     broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.DisplayChatCommand(
-                            "Game Over! Winner by forfeit: " + winner.getClientSession().getClientName()));
+                            "Game Over! Winner by forfeit: " + winner.getClientSession().getUserName()));
                     stop();
                     if (onGameEnd != null)
                         onGameEnd.run();
