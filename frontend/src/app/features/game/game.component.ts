@@ -478,6 +478,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   private roadImages: Map<string, HTMLImageElement> = new Map();
   private roadImagesLoaded = false;
 
+  // Creep sprite images
+  private creepSprites: Map<string, HTMLImageElement> = new Map();
+
   constructor(
     public lobbyService: LobbyService,
     public authService: AuthService,
@@ -609,6 +612,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.resizeCanvas();
     this.loadRoadImages();
+    this.loadCreepSprites();
     this.startAnimationLoop();
 
     window.addEventListener('resize', () => this.onResize());
@@ -673,6 +677,21 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       };
       img.src = `/assets/tiles/roads/road_${v}.png`;
       this.roadImages.set(v, img);
+    }
+  }
+
+  private loadCreepSprites(): void {
+    const creepTypes = ['GHOST', 'TROLL'];
+    for (const type of creepTypes) {
+      const img = new Image();
+      img.onload = () => {
+        console.log(`Loaded creep sprite: ${type} (${img.naturalWidth}x${img.naturalHeight})`);
+      };
+      img.onerror = () => {
+        console.error(`Failed to load creep sprite: /assets/sprites/creeps/${type.toLowerCase()}.png`);
+      };
+      img.src = `/assets/sprites/creeps/${type.toLowerCase()}.png`;
+      this.creepSprites.set(type, img);
     }
   }
 
@@ -776,11 +795,16 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private handleResourceUpdate(data: Record<string, any>): void {
-    this.resources = {
-      wood: data['wood'] as number,
-      stone: data['stone'] as number,
-      gold: data['gold'] as number
-    };
+    const wood = data['wood'] as number;
+    const stone = data['stone'] as number;
+    const gold = data['gold'] as number;
+
+    // Only update if values actually changed (avoid unnecessary change detection)
+    if (this.resources.wood !== wood ||
+        this.resources.stone !== stone ||
+        this.resources.gold !== gold) {
+      this.resources = { wood, stone, gold };
+    }
   }
 
   private handleBuildingChanged(data: Record<string, any>): void {
@@ -839,6 +863,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   private handleSpawnCreep(data: Record<string, any>): void {
     const x = data['x'] as number;
     const y = data['y'] as number;
+    const spawnedByPlayer = data['spawnedByPlayer'] as number | null ?? null;
     const creep: Creep = {
       id: data['creepId'] as string,
       creepType: data['creepType'] as string,
@@ -847,12 +872,13 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       targetX: x,
       targetY: y,
       playerNumber: data['playerNumber'] as number,
+      spawnedByPlayer: spawnedByPlayer,
       hitpoints: data['hitpoints'] as number,
       maxHitpoints: data['maxHitpoints'] as number,
       speed: data['speed'] as number || 0.33
     };
     this.creeps.set(creep.id, creep);
-    console.log('Spawned creep:', creep.id, 'at', creep.x, creep.y, 'speed:', creep.speed);
+    console.log('Spawned creep:', creep.id, 'at', creep.x, creep.y, 'spawnedBy:', spawnedByPlayer);
   }
 
   private handleUpdateCreep(data: Record<string, any>): void {
@@ -888,14 +914,20 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     const playerNumber = data['playerNumber'] as number;
     const isWinner = data['isWinner'] as boolean;
 
+    console.log('Game over event received:', { playerNumber, isWinner, myPlayerNumber: this.myPlayerNumber });
+
     if (isWinner) {
-      this.gameOver = true;
+      // Winner announcement - show to everyone who hasn't already seen game over
       if (playerNumber === this.myPlayerNumber) {
+        this.gameOver = true;
         this.gameOverMessage = 'Victory! You are the last player standing!';
-      } else {
-        this.gameOverMessage = `Player ${playerNumber} wins!`;
+      } else if (!this.gameOver) {
+        // Only show "Player X wins" if we haven't already lost
+        this.gameOver = true;
+        this.gameOverMessage = `Player ${playerNumber + 1} wins!`;
       }
     } else if (playerNumber === this.myPlayerNumber) {
+      // I lost
       this.gameOver = true;
       this.gameOverMessage = 'Game Over - Your castle has fallen!';
     }
@@ -939,38 +971,47 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private drawCreeps(): void {
     for (const creep of this.creeps.values()) {
-      const screenX = creep.x * this.tileSize - this.cameraX;
-      const screenY = creep.y * this.tileSize - this.cameraY;
+      // creep.x and creep.y already include +0.5 offset from backend (centered on tile)
+      const centerX = creep.x * this.tileSize - this.cameraX;
+      const centerY = creep.y * this.tileSize - this.cameraY;
 
       // Skip if off-screen
       const canvas = this.canvasRef.nativeElement;
-      if (screenX < -this.tileSize || screenX > canvas.width ||
-          screenY < -this.tileSize || screenY > canvas.height) {
+      if (centerX < -this.tileSize || centerX > canvas.width + this.tileSize ||
+          centerY < -this.tileSize || centerY > canvas.height + this.tileSize) {
         continue;
       }
 
       const size = this.tileSize * 0.6;
-      const centerX = screenX + this.tileSize / 2;
-      const centerY = screenY + this.tileSize / 2;
 
-      // Get color for this creep's target player
-      const colorIndex = this.playerColorMap.get(creep.playerNumber) ?? creep.playerNumber;
-      const playerColor = getPlayerColor(colorIndex);
+      // Try to draw sprite
+      const sprite = this.creepSprites.get(creep.creepType);
+      if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+        // Draw sprite centered on position
+        this.ctx.drawImage(sprite, centerX - size / 2, centerY - size / 2, size, size);
+      } else {
+        // Fallback: Draw creep body (circle)
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
+        this.ctx.fillStyle = creep.creepType === 'TROLL' ? '#5a4a3a' : '#9090c0';
+        this.ctx.fill();
+      }
 
-      // Draw creep body (circle)
-      this.ctx.beginPath();
-      this.ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2);
-      this.ctx.fillStyle = creep.creepType === 'TROLL' ? '#5a4a3a' : '#9090c0';
-      this.ctx.fill();
-      this.ctx.strokeStyle = playerColor;
-      this.ctx.lineWidth = 2;
-      this.ctx.stroke();
+      // Draw contour ring (only if sent by a player, not wave-spawned)
+      if (creep.spawnedByPlayer !== null && creep.spawnedByPlayer !== undefined) {
+        const senderColorIndex = this.playerColorMap.get(creep.spawnedByPlayer) ?? creep.spawnedByPlayer;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, size / 2 + 2, 0, Math.PI * 2);
+        this.ctx.strokeStyle = getPlayerColor(senderColorIndex);
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+      }
 
       // Draw health bar
       const hpBarWidth = size;
       const hpBarHeight = 4;
       const hpBarX = centerX - hpBarWidth / 2;
-      const hpBarY = screenY + 2;
+      const hpBarY = centerY - size / 2 - hpBarHeight - 2;
       const hpPercent = creep.hitpoints / creep.maxHitpoints;
 
       // Background
@@ -981,14 +1022,6 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       const hpColor = hpPercent > 0.5 ? '#4CAF50' : hpPercent > 0.25 ? '#FFC107' : '#F44336';
       this.ctx.fillStyle = hpColor;
       this.ctx.fillRect(hpBarX, hpBarY, hpBarWidth * hpPercent, hpBarHeight);
-
-      // Draw creep icon
-      this.ctx.font = `${size * 0.6}px Arial`;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillStyle = '#fff';
-      const icon = creep.creepType === 'TROLL' ? '!' : '?';
-      this.ctx.fillText(icon, centerX, centerY);
     }
   }
 

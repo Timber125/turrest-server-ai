@@ -86,7 +86,8 @@ export interface Creep {
   y: number;
   targetX: number;        // Server-sent position (destination)
   targetY: number;
-  playerNumber: number;
+  playerNumber: number;   // Target player (whose castle the creep is heading to)
+  spawnedByPlayer: number | null;  // null = wave-spawned, number = sent by that player
   hitpoints: number;
   maxHitpoints: number;
   speed: number;          // Tiles per second

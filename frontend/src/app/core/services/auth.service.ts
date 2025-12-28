@@ -21,18 +21,18 @@ export class AuthService {
   }
 
   private loadStoredUser(): void {
-    const stored = localStorage.getItem('user');
+    const stored = sessionStorage.getItem('user');
     if (stored) {
       try {
         this.currentUser.set(JSON.parse(stored));
       } catch {
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
       }
     }
   }
 
   private storeUser(user: User): void {
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
     this.currentUser.set(user);
   }
 
@@ -64,7 +64,7 @@ export class AuthService {
   }
 
   logout(): void {
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('user');
     this.currentUser.set(null);
   }
 
