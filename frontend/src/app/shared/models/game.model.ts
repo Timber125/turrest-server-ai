@@ -100,3 +100,54 @@ export interface PlayerScoreEntry {
   score: number;
   isAlive: boolean;
 }
+
+// Tower types
+export interface TowerDefinition {
+  id: number;
+  name: string;
+  icon: string;
+  cost: { wood: number; stone: number; gold: number };
+  allowedTerrains: TerrainType[];
+  range: number;
+  cooldownMs: number;
+  damage: number;
+}
+
+export const TOWER_DEFINITIONS: TowerDefinition[] = [
+  {
+    id: 1,
+    name: 'Basic Tower',
+    icon: '🗼',
+    cost: { wood: 80, stone: 80, gold: 100 },
+    allowedTerrains: [TerrainType.GRASS, TerrainType.DIRT],
+    range: 3,
+    cooldownMs: 1000,
+    damage: 10
+  }
+];
+
+export interface Tower {
+  id: string;
+  towerType: number;
+  towerName: string;
+  x: number;
+  y: number;
+  playerNumber: number;
+  range: number;
+  damage: number;
+  cooldownMs: number;
+  theoreticalFireRate: number;
+  practicalFireRate: number;
+}
+
+export interface TowerAttack {
+  towerId: string;
+  towerX: number;
+  towerY: number;
+  targetCreepId: string;
+  targetX: number;
+  targetY: number;
+  damage: number;
+  bulletType: string;
+  progress: number; // 0-1 for animation interpolation
+}

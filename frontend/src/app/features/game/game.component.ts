@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, Hos
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { LobbyService, SocketService, AuthService } from '../../core/services';
-import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry } from '../../shared/models';
+import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry, Tower, TowerAttack, TowerDefinition, TOWER_DEFINITIONS } from '../../shared/models';
 import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
 import { TileInfoComponent } from './components/tile-info/tile-info.component';
@@ -103,6 +103,7 @@ import { Subscription } from 'rxjs';
                [placementMode]="placementMode"
                (actionTriggered)="onActionTriggered($event)"
                (buildingSelected)="onBuildingSelected($event)"
+               (towerSelected)="onTowerSelected($event)"
                (placementCancelled)="cancelPlacementMode()">
             </app-action-panel>
 
@@ -433,13 +434,18 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   gameOver = false;
   gameOverMessage = '';
 
+  // Towers
+  towers: Map<string, Tower> = new Map();
+  activeAttacks: TowerAttack[] = [];
+
   // Scoreboard
   scoreboard: PlayerScoreEntry[] = [];
   private lastFrameTime = 0;
   private animationFrameId: number | null = null;
 
   // Placement mode
-  placementMode: BuildingDefinition | null = null;
+  placementMode: BuildingDefinition | TowerDefinition | null = null;
+  placementType: 'building' | 'tower' | null = null;
   hoverTileX = -1;
   hoverTileY = -1;
 
@@ -622,6 +628,20 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         this.ngZone.run(() => this.handleScoreboard(cmd.data));
       });
     this.subscriptions.push(scoreboardSub);
+
+    // Listen for tower placed
+    const towerPlacedSub = this.socketService.onCommand('GAME', 'TOWER_PLACED')
+      .subscribe(cmd => {
+        this.handleTowerPlaced(cmd.data);
+      });
+    this.subscriptions.push(towerPlacedSub);
+
+    // Listen for tower attacks
+    const towerAttackSub = this.socketService.onCommand('GAME', 'BATCHED_TOWER_ATTACK')
+      .subscribe(cmd => {
+        this.handleTowerAttacks(cmd.data);
+      });
+    this.subscriptions.push(towerAttackSub);
   }
 
   private showError(message: string): void {
@@ -666,6 +686,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       this.lastFrameTime = timestamp;
 
       this.updateCreepPositions(deltaTime);
+      this.updateBulletPositions(deltaTime);
       this.render();
 
       this.animationFrameId = requestAnimationFrame(animate);
@@ -692,6 +713,18 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         creep.y = creep.targetY;
       }
     }
+  }
+
+  private updateBulletPositions(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    // Update bullet progress and remove completed bullets
+    // Bullets travel at 5 tiles per second (complete in 0.2 seconds for 1 tile)
+    const bulletSpeed = 5.0; // Progress per second (completes 0-1 in ~0.2s)
+    this.activeAttacks = this.activeAttacks.filter(attack => {
+      attack.progress += deltaTime * bulletSpeed;
+      return attack.progress < 1;
+    });
   }
 
   private loadRoadImages(): void {
@@ -975,6 +1008,42 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.render();
   }
 
+  private handleTowerPlaced(data: Record<string, any>): void {
+    const tower: Tower = {
+      id: data['towerId'] as string,
+      towerType: data['towerType'] as number,
+      towerName: data['towerName'] as string,
+      x: data['x'] as number,
+      y: data['y'] as number,
+      playerNumber: data['playerNumber'] as number,
+      range: data['range'] as number,
+      damage: data['damage'] as number,
+      cooldownMs: data['cooldownMs'] as number,
+      theoreticalFireRate: data['theoreticalFireRate'] as number,
+      practicalFireRate: data['practicalFireRate'] as number
+    };
+    this.towers.set(tower.id, tower);
+    console.log(`Tower placed: ${tower.towerName} at (${tower.x}, ${tower.y}) by player ${tower.playerNumber}`);
+    console.log(`  Rate: ${tower.theoreticalFireRate.toFixed(2)}/s theoretical, ${tower.practicalFireRate.toFixed(2)}/s practical`);
+  }
+
+  private handleTowerAttacks(data: Record<string, any>): void {
+    const attacks = data['attacks'] as Array<Record<string, any>>;
+    for (const attack of attacks) {
+      this.activeAttacks.push({
+        towerId: attack['towerId'] as string,
+        towerX: attack['towerX'] as number,
+        towerY: attack['towerY'] as number,
+        targetCreepId: attack['targetCreepId'] as string,
+        targetX: attack['targetX'] as number,
+        targetY: attack['targetY'] as number,
+        damage: attack['damage'] as number,
+        bulletType: attack['bulletType'] as string,
+        progress: 0
+      });
+    }
+  }
+
   private handlePlayerDamage(data: Record<string, any>): void {
     const playerNumber = data['playerNumber'] as number;
     const damage = data['damage'] as number;
@@ -1044,8 +1113,14 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.drawGrid();
 
+    // Draw towers
+    this.drawTowers();
+
     // Draw creeps
     this.drawCreeps();
+
+    // Draw bullets (on top of everything)
+    this.drawBullets();
 
     if (this.selectedTile) {
       this.drawSelection();
@@ -1110,6 +1185,67 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       const hpColor = hpPercent > 0.5 ? '#4CAF50' : hpPercent > 0.25 ? '#FFC107' : '#F44336';
       this.ctx.fillStyle = hpColor;
       this.ctx.fillRect(hpBarX, hpBarY, hpBarWidth * hpPercent, hpBarHeight);
+    }
+  }
+
+  private drawTowers(): void {
+    for (const tower of this.towers.values()) {
+      const screenX = tower.x * this.tileSize - this.cameraX;
+      const screenY = tower.y * this.tileSize - this.cameraY;
+
+      // Skip if off-screen
+      const canvas = this.canvasRef.nativeElement;
+      if (screenX < -this.tileSize || screenX > canvas.width + this.tileSize ||
+          screenY < -this.tileSize || screenY > canvas.height + this.tileSize) {
+        continue;
+      }
+
+      // Draw tower base
+      const towerSize = this.tileSize * 0.8;
+      const offset = (this.tileSize - towerSize) / 2;
+      this.ctx.fillStyle = '#444';
+      this.ctx.fillRect(screenX + offset, screenY + offset, towerSize, towerSize);
+
+      // Draw tower border with player color
+      const colorIndex = this.playerColorMap.get(tower.playerNumber) ?? tower.playerNumber;
+      this.ctx.strokeStyle = getPlayerColor(colorIndex);
+      this.ctx.lineWidth = 3;
+      this.ctx.strokeRect(screenX + offset, screenY + offset, towerSize, towerSize);
+
+      // Draw tower icon
+      this.ctx.font = `${this.tileSize * 0.5}px Arial`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillStyle = '#fff';
+      this.ctx.fillText('🗼', screenX + this.tileSize / 2, screenY + this.tileSize / 2);
+    }
+  }
+
+  private drawBullets(): void {
+    for (const attack of this.activeAttacks) {
+      // Convert tile coordinates to screen coordinates
+      const startX = (attack.towerX + 0.5) * this.tileSize - this.cameraX;
+      const startY = (attack.towerY + 0.5) * this.tileSize - this.cameraY;
+      const endX = attack.targetX * this.tileSize - this.cameraX;
+      const endY = attack.targetY * this.tileSize - this.cameraY;
+
+      // Interpolate bullet position
+      const bulletX = startX + (endX - startX) * attack.progress;
+      const bulletY = startY + (endY - startY) * attack.progress;
+
+      // Draw bullet
+      this.ctx.beginPath();
+      this.ctx.arc(bulletX, bulletY, 4, 0, Math.PI * 2);
+      this.ctx.fillStyle = '#ffcc00';
+      this.ctx.fill();
+
+      // Draw bullet trail
+      this.ctx.beginPath();
+      this.ctx.moveTo(startX, startY);
+      this.ctx.lineTo(bulletX, bulletY);
+      this.ctx.strokeStyle = 'rgba(255, 204, 0, 0.3)';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
     }
   }
 
@@ -1247,13 +1383,31 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     const screenX = this.hoverTileX * this.tileSize - this.cameraX;
     const screenY = this.hoverTileY * this.tileSize - this.cameraY;
 
-    const canPlace = this.canPlaceBuilding(tile, this.placementMode);
+    const canPlace = this.placementType === 'tower'
+      ? this.canPlaceTower(tile, this.placementMode as TowerDefinition)
+      : this.canPlaceBuilding(tile, this.placementMode as BuildingDefinition);
     const color = canPlace ? 'rgba(0, 150, 255, 0.5)' : 'rgba(255, 0, 0, 0.5)';
 
     this.ctx.fillStyle = color;
     this.ctx.fillRect(screenX, screenY, this.tileSize, this.tileSize);
 
-    // Draw building icon preview
+    // Draw tower range preview when placing a tower
+    if (this.placementType === 'tower' && canPlace) {
+      const tower = this.placementMode as TowerDefinition;
+      const centerX = screenX + this.tileSize / 2;
+      const centerY = screenY + this.tileSize / 2;
+      const rangePixels = tower.range * this.tileSize;
+
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, rangePixels, 0, Math.PI * 2);
+      this.ctx.strokeStyle = 'rgba(0, 150, 255, 0.5)';
+      this.ctx.lineWidth = 2;
+      this.ctx.stroke();
+      this.ctx.fillStyle = 'rgba(0, 150, 255, 0.1)';
+      this.ctx.fill();
+    }
+
+    // Draw building/tower icon preview
     this.ctx.font = `${this.tileSize * 0.5}px Arial`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
@@ -1278,6 +1432,25 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.resources.wood >= building.cost.wood &&
            this.resources.stone >= building.cost.stone &&
            this.resources.gold >= building.cost.gold;
+  }
+
+  private canPlaceTower(tile: Tile, tower: TowerDefinition): boolean {
+    // Check ownership - player can only build on their own territory
+    if (!tile.owners || !tile.owners.includes(this.myPlayerNumber)) {
+      return false;
+    }
+    // Check terrain
+    if (!tower.allowedTerrains.includes(tile.terrainType)) {
+      return false;
+    }
+    // Check for existing structure
+    if (tile.structureType !== undefined) {
+      return false;
+    }
+    // Check resources
+    return this.resources.wood >= tower.cost.wood &&
+           this.resources.stone >= tower.cost.stone &&
+           this.resources.gold >= tower.cost.gold;
   }
 
   private drawGrid(): void {
@@ -1461,16 +1634,30 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     // Handle placement mode
     if (this.placementMode) {
       const tile = this.tiles.get(`${tileX},${tileY}`);
-      if (tile && this.canPlaceBuilding(tile, this.placementMode)) {
-        // Send place building command
-        this.socketService.sendCommand('GAME', 'PLACE_BUILDING', {
-          x: tileX,
-          y: tileY,
-          buildingType: this.placementMode.id
-        });
-        this.cancelPlacementMode();
+      if (this.placementType === 'tower') {
+        // Tower placement
+        if (tile && this.canPlaceTower(tile, this.placementMode as TowerDefinition)) {
+          this.socketService.sendCommand('GAME', 'PLACE_TOWER', {
+            x: tileX,
+            y: tileY,
+            towerType: this.placementMode.id
+          });
+          this.cancelPlacementMode();
+        } else {
+          this.showError('Cannot place tower here');
+        }
       } else {
-        this.showError('Cannot place building here');
+        // Building placement
+        if (tile && this.canPlaceBuilding(tile, this.placementMode as BuildingDefinition)) {
+          this.socketService.sendCommand('GAME', 'PLACE_BUILDING', {
+            x: tileX,
+            y: tileY,
+            buildingType: this.placementMode.id
+          });
+          this.cancelPlacementMode();
+        } else {
+          this.showError('Cannot place building here');
+        }
       }
       return;
     }
@@ -1488,6 +1675,16 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   // Building placement
   onBuildingSelected(building: BuildingDefinition): void {
     this.placementMode = building;
+    this.placementType = 'building';
+    this.selectedTile = null;
+    this.selectedTileX = -1;
+    this.selectedTileY = -1;
+  }
+
+  // Tower placement
+  onTowerSelected(tower: TowerDefinition): void {
+    this.placementMode = tower;
+    this.placementType = 'tower';
     this.selectedTile = null;
     this.selectedTileX = -1;
     this.selectedTileY = -1;
@@ -1495,6 +1692,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   cancelPlacementMode(): void {
     this.placementMode = null;
+    this.placementType = null;
     this.hoverTileX = -1;
     this.hoverTileY = -1;
     this.render();
