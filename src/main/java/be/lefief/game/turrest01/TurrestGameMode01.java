@@ -38,14 +38,16 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     private static final Logger LOG = LoggerFactory.getLogger(TurrestGameMode01.class);
     private static final String LEVEL_PATH = "levels/0001.level";
     private static final String LEVEL_NAME = "0001";
-    private static final int TICK_RATE_MS = 1000; // Game tick once per second
+    private static final int TICK_RATE_MS = 200; // Game tick 5 times per second (5 Hz)
     private static final double TICK_DURATION_SEC = TICK_RATE_MS / 1000.0;
+    private static final int RESOURCE_UPDATE_INTERVAL = 5; // Send resource updates every 5 ticks (1 second)
 
     private GameMap gameMap;
     private CreepManager creepManager;
     private ScheduledExecutorService gameLoop;
     private boolean running;
     private int tickCount = 0;
+    private int resourceTickCounter = 0;
 
     public TurrestGameMode01(List<ClientSession> players, UUID lobbyHostId, Map<UUID, Integer> playerColorMap) {
         super(players, lobbyHostId, playerColorMap);
@@ -195,28 +197,33 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
 
         try {
             tickCount++;
+            resourceTickCounter++;
 
-            // Process creeps (spawn, move, damage)
+            // Process creeps (spawn, move, damage) with delta time
             if (creepManager != null) {
-                creepManager.tick(tickCount, this);
+                creepManager.tick(tickCount, this, TICK_DURATION_SEC);
             }
 
-            // Process resource production every tick (once per second with 1000ms tick rate)
-            for (Turrest01Player player : getPlayerByNumber().values()) {
-                if (player.isConnected() && player.isAlive()) {
-                    PlayerResources resources = player.getResources();
-                    resources.addProduction();
+            // Process resource production and updates every RESOURCE_UPDATE_INTERVAL ticks (1 second at 5Hz)
+            if (resourceTickCounter >= RESOURCE_UPDATE_INTERVAL) {
+                resourceTickCounter = 0;
 
-                    // Send resource update to the player
-                    player.getClientSession().sendCommand(new ResourceUpdateResponse(
-                            resources.getWood(),
-                            resources.getStone(),
-                            resources.getGold()
-                    ));
+                for (Turrest01Player player : getPlayerByNumber().values()) {
+                    if (player.isConnected() && player.isAlive()) {
+                        PlayerResources resources = player.getResources();
+                        resources.addProduction();
+
+                        // Send resource update to the player
+                        player.getClientSession().sendCommand(new ResourceUpdateResponse(
+                                resources.getWood(),
+                                resources.getStone(),
+                                resources.getGold()
+                        ));
+                    }
                 }
             }
 
-            if (tickCount % 5 == 0) {
+            if (tickCount % 25 == 0) { // Log every 5 seconds (25 ticks at 5Hz)
                 LOG.debug("Game tick {} completed, active creeps: {}",
                         tickCount, creepManager != null ? creepManager.getActiveCreepCount() : 0);
             }

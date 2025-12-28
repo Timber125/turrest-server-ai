@@ -3,10 +3,10 @@ package be.lefief.game.turrest01.creep;
 import be.lefief.game.map.GameMap;
 import be.lefief.game.turrest01.Turrest01Player;
 import be.lefief.game.turrest01.TurrestGameMode01;
+import be.lefief.game.turrest01.commands.BatchedCreepUpdateCommand;
+import be.lefief.game.turrest01.commands.BatchedSpawnCreepCommand;
 import be.lefief.game.turrest01.commands.DespawnCreepCommand;
 import be.lefief.game.turrest01.commands.PlayerTakesDamageCommand;
-import be.lefief.game.turrest01.commands.SpawnCreepCommand;
-import be.lefief.game.turrest01.commands.UpdateCreepCommand;
 import be.lefief.game.turrest01.wave.Wave;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,19 +47,22 @@ public class CreepManager {
      *
      * @param currentTick Current tick number
      * @param game        Game instance for broadcasting
+     * @param deltaTime   Time elapsed since last tick in seconds
      */
-    public void tick(int currentTick, TurrestGameMode01 game) {
+    public void tick(int currentTick, TurrestGameMode01 game, double deltaTime) {
         // 1. Spawn wave creeps if it's time
         spawnWaveCreeps(currentTick, game);
 
         // 2. Move all creeps
-        moveCreeps(game);
+        moveCreeps(game, deltaTime);
 
         // 3. Check for creeps reaching castle
         checkCastleReached(game);
     }
 
     private void spawnWaveCreeps(int tick, TurrestGameMode01 game) {
+        List<Creep> spawnedCreeps = new ArrayList<>();
+
         for (Wave wave : waves) {
             if (wave.getTick() == tick) {
                 LOG.info("Spawning wave at tick {}: {} creeps per player", tick, wave.getCreeps().size());
@@ -78,19 +81,32 @@ public class CreepManager {
                         // null = wave-spawned (no colored contour)
                         Creep creep = new Creep(type, playerNum, null, path, spawner);
                         activeCreeps.put(creep.getId(), creep);
-                        game.broadcastToAllPlayers(new SpawnCreepCommand(creep));
+                        spawnedCreeps.add(creep);
                     }
                 }
             }
         }
+
+        // Send all spawns in a single batched command
+        if (!spawnedCreeps.isEmpty()) {
+            game.broadcastToAllPlayers(new BatchedSpawnCreepCommand(spawnedCreeps));
+            LOG.debug("Batched {} creep spawns into single command", spawnedCreeps.size());
+        }
     }
 
-    private void moveCreeps(TurrestGameMode01 game) {
+    private void moveCreeps(TurrestGameMode01 game, double deltaTime) {
+        List<Creep> movedCreeps = new ArrayList<>();
+
         for (Creep creep : activeCreeps.values()) {
             if (!creep.hasReachedCastle() && !creep.isDead()) {
-                creep.move(1.0); // 1 second per tick
-                game.broadcastToAllPlayers(new UpdateCreepCommand(creep));
+                creep.move(deltaTime);
+                movedCreeps.add(creep);
             }
+        }
+
+        // Send all updates in a single batched command
+        if (!movedCreeps.isEmpty()) {
+            game.broadcastToAllPlayers(new BatchedCreepUpdateCommand(movedCreeps));
         }
     }
 

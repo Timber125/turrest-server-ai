@@ -567,19 +567,33 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     this.subscriptions.push(fullMapSub);
 
-    // Listen for creep spawn
+    // Listen for creep spawn (legacy single spawn)
     const spawnCreepSub = this.socketService.onCommand('GAME', 'SPAWN_CREEP')
       .subscribe(cmd => {
         this.handleSpawnCreep(cmd.data);
       });
     this.subscriptions.push(spawnCreepSub);
 
-    // Listen for creep update
+    // Listen for batched creep spawns
+    const batchedSpawnSub = this.socketService.onCommand('GAME', 'BATCHED_SPAWN_CREEP')
+      .subscribe(cmd => {
+        this.handleBatchedSpawnCreep(cmd.data);
+      });
+    this.subscriptions.push(batchedSpawnSub);
+
+    // Listen for creep update (legacy single update)
     const updateCreepSub = this.socketService.onCommand('GAME', 'UPDATE_CREEP')
       .subscribe(cmd => {
         this.handleUpdateCreep(cmd.data);
       });
     this.subscriptions.push(updateCreepSub);
+
+    // Listen for batched creep updates
+    const batchedUpdateSub = this.socketService.onCommand('GAME', 'BATCHED_CREEP_UPDATE')
+      .subscribe(cmd => {
+        this.handleBatchedCreepUpdate(cmd.data);
+      });
+    this.subscriptions.push(batchedUpdateSub);
 
     // Listen for creep despawn
     const despawnCreepSub = this.socketService.onCommand('GAME', 'DESPAWN_CREEP')
@@ -635,7 +649,11 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.resizeCanvas();
     this.loadRoadImages();
     this.loadCreepSprites();
-    this.startAnimationLoop();
+
+    // Run animation loop outside Angular zone for better performance
+    this.ngZone.runOutsideAngular(() => {
+      this.startAnimationLoop();
+    });
 
     window.addEventListener('resize', () => this.onResize());
   }
@@ -912,6 +930,42 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       creep.targetY = data['y'] as number;
       creep.hitpoints = data['hitpoints'] as number;
     }
+  }
+
+  private handleBatchedCreepUpdate(data: Record<string, any>): void {
+    const updates = data['updates'] as Array<Record<string, any>>;
+    for (const update of updates) {
+      const creep = this.creeps.get(update['id'] as string);
+      if (creep) {
+        creep.targetX = update['x'] as number;
+        creep.targetY = update['y'] as number;
+        creep.hitpoints = update['hp'] as number;
+      }
+    }
+  }
+
+  private handleBatchedSpawnCreep(data: Record<string, any>): void {
+    const spawns = data['spawns'] as Array<Record<string, any>>;
+    for (const spawn of spawns) {
+      const x = spawn['x'] as number;
+      const y = spawn['y'] as number;
+      const spawnedByPlayer = spawn['spawnedByPlayer'] as number | null ?? null;
+      const creep: Creep = {
+        id: spawn['creepId'] as string,
+        creepType: spawn['creepType'] as string,
+        x: x,
+        y: y,
+        targetX: x,
+        targetY: y,
+        playerNumber: spawn['playerNumber'] as number,
+        spawnedByPlayer: spawnedByPlayer,
+        hitpoints: spawn['hitpoints'] as number,
+        maxHitpoints: spawn['maxHitpoints'] as number,
+        speed: spawn['speed'] as number || 0.66 // Default to doubled speed
+      };
+      this.creeps.set(creep.id, creep);
+    }
+    console.log(`Batched spawn: ${spawns.length} creeps`);
   }
 
   private handleDespawnCreep(data: Record<string, any>): void {
