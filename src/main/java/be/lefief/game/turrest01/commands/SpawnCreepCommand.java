@@ -22,6 +22,7 @@ public class SpawnCreepCommand extends ServerToClientCommand {
         data.put("x", creep.getX());
         data.put("y", creep.getY());
         data.put("playerNumber", creep.getOwnerPlayerNumber());
+        data.put("spawnedByPlayer", creep.getSpawnedByPlayer());  // null for wave-spawned
         data.put("hitpoints", creep.getHitpoints());
         data.put("maxHitpoints", creep.getType().getHitpoints());
         data.put("speed", creep.getType().getTilesPerSecond());

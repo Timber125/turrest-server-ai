@@ -75,7 +75,8 @@ public class CreepManager {
                     }
 
                     for (CreepType type : wave.getCreeps()) {
-                        Creep creep = new Creep(type, playerNum, path, spawner);
+                        // null = wave-spawned (no colored contour)
+                        Creep creep = new Creep(type, playerNum, null, path, spawner);
                         activeCreeps.put(creep.getId(), creep);
                         game.broadcastToAllPlayers(new SpawnCreepCommand(creep));
                     }

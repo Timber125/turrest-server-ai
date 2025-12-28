@@ -224,6 +224,53 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     }
 
     @Override
+    public void handlePlayerDisconnect(java.util.UUID userId) {
+        // Find the disconnecting player
+        Turrest01Player disconnectedPlayer = null;
+        for (Turrest01Player player : getPlayerByNumber().values()) {
+            if (player.getClientSession() != null && userId.equals(player.getClientSession().getUserId())) {
+                disconnectedPlayer = player;
+                player.setConnected(false);
+                break;
+            }
+        }
+
+        if (!isGameIsRunning()) return;
+
+        // Check for winner by forfeit
+        long connectedCount = getActiveConnectedPlayersCount();
+        if (getPlayerByNumber().size() > 1 && connectedCount == 1) {
+            Turrest01Player winner = getPlayerByNumber().values().stream()
+                    .filter(Turrest01Player::isConnected)
+                    .findFirst()
+                    .orElse(null);
+
+            if (winner != null) {
+                LOG.info("Game over! Player {} wins by forfeit (opponent disconnected)", winner.getPlayerNumber());
+
+                // Send game over to disconnected player (loser)
+                if (disconnectedPlayer != null) {
+                    broadcastToAllPlayers(new GameOverCommand(disconnectedPlayer.getPlayerNumber(), false));
+                }
+
+                // Send winner announcement
+                broadcastToAllPlayers(new GameOverCommand(winner.getPlayerNumber(), true));
+
+                stop();
+                if (getOnGameEnd() != null) {
+                    getOnGameEnd().run();
+                }
+            }
+        } else if (connectedCount == 0) {
+            setGameIsRunning(false);
+            stop();
+            if (getOnGameEnd() != null) {
+                getOnGameEnd().run();
+            }
+        }
+    }
+
+    @Override
     public void stop() {
         running = false;
         setGameIsRunning(false);

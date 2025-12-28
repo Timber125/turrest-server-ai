@@ -11,6 +11,7 @@ public class Creep {
     private final UUID id;
     private final CreepType type;
     private final int ownerPlayerNumber;
+    private final Integer spawnedByPlayer;  // null = wave-spawned, player number = sent by that player
     private double x;
     private double y;
     private int currentPathIndex;
@@ -18,10 +19,11 @@ public class Creep {
     private int hitpoints;
     private boolean reachedCastle;
 
-    public Creep(CreepType type, int ownerPlayerNumber, List<Point> path, Point spawnerPosition) {
+    public Creep(CreepType type, int ownerPlayerNumber, Integer spawnedByPlayer, List<Point> path, Point spawnerPosition) {
         this.id = UUID.randomUUID();
         this.type = type;
         this.ownerPlayerNumber = ownerPlayerNumber;
+        this.spawnedByPlayer = spawnedByPlayer;
         this.path = path;
         this.x = spawnerPosition.x + 0.5; // Center of tile
         this.y = spawnerPosition.y + 0.5;
