@@ -12,6 +12,7 @@ import be.lefief.game.turrest01.commands.ScoreboardCommand;
 import be.lefief.game.turrest01.commands.TileUpdateResponse;
 import be.lefief.game.turrest01.creep.CreepManager;
 import be.lefief.game.turrest01.map.RoadGenerator;
+import be.lefief.game.turrest01.tower.TowerManager;
 import be.lefief.game.turrest01.resource.PlayerResources;
 import be.lefief.game.turrest01.structure.Road;
 import be.lefief.game.turrest01.wave.Wave;
@@ -44,6 +45,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
 
     private GameMap gameMap;
     private CreepManager creepManager;
+    private TowerManager towerManager;
     private ScheduledExecutorService gameLoop;
     private boolean running;
     private int tickCount = 0;
@@ -83,6 +85,10 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
             List<Wave> waves = WaveLoader.load(LEVEL_NAME);
             creepManager = new CreepManager(waves, gameMap, playerCount);
             LOG.info("Loaded {} waves for creep spawning", waves.size());
+
+            // 5. Create TowerManager
+            towerManager = new TowerManager(creepManager, TICK_RATE_MS);
+            LOG.info("TowerManager created with tick rate {}ms", TICK_RATE_MS);
 
             // 5. Schedule game beginning after 5 seconds
             Executors.newSingleThreadScheduledExecutor().schedule(() -> {
@@ -184,6 +190,14 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         return gameMap;
     }
 
+    public TowerManager getTowerManager() {
+        return towerManager;
+    }
+
+    public int getTickRateMs() {
+        return TICK_RATE_MS;
+    }
+
     private void startGameLoop() {
         running = true;
         gameLoop = Executors.newSingleThreadScheduledExecutor();
@@ -202,6 +216,11 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
             // Process creeps (spawn, move, damage) with delta time
             if (creepManager != null) {
                 creepManager.tick(tickCount, this, TICK_DURATION_SEC);
+            }
+
+            // Process towers (targeting, shooting)
+            if (towerManager != null) {
+                towerManager.tick(this);
             }
 
             // Process resource production and updates every RESOURCE_UPDATE_INTERVAL ticks (1 second at 5Hz)

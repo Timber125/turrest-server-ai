@@ -8,9 +8,14 @@ import be.lefief.game.turrest01.TurrestGameMode01;
 import be.lefief.game.turrest01.building.BuildingDefinition;
 import be.lefief.game.turrest01.commands.BuildingChangedResponse;
 import be.lefief.game.turrest01.commands.PlaceBuildingCommand;
+import be.lefief.game.turrest01.commands.PlaceTowerCommand;
 import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
+import be.lefief.game.turrest01.commands.TowerPlacedCommand;
 import be.lefief.game.turrest01.resource.PlayerResources;
 import be.lefief.game.turrest01.structure.TurrestBuilding;
+import be.lefief.game.turrest01.tower.BasicTower;
+import be.lefief.game.turrest01.tower.Tower;
+import be.lefief.game.turrest01.tower.TowerDefinition;
 import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
 import be.lefief.sockets.commands.client.reception.ErrorMessageResponse;
@@ -137,6 +142,115 @@ public class Turrest01GameHandler {
         turrestGame.broadcastToAllPlayers(new BuildingChangedResponse(
                 x, y, buildingDef.getId(), player.getPlayerNumber()
         ));
+    }
+
+    public void handlePlaceTower(SecuredClientToServerCommand<PlaceTowerCommand> command, ClientSession clientSession) {
+        PlaceTowerCommand placeCommand = command.getCommand();
+        int x = placeCommand.getX();
+        int y = placeCommand.getY();
+        int towerTypeId = placeCommand.getTowerType();
+
+        UUID userId = clientSession.getUserId();
+        LOG.info("[TOWER DEBUG] Player '{}' (userId={}) attempting to place tower type {} at ({}, {})",
+                command.getUserName(), userId, towerTypeId, x, y);
+
+        // Get the game for this player
+        Game<?> game = gameService.getGameByUserId(userId);
+
+        if (game == null) {
+            LOG.warn("No game found for user {}", userId);
+            clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
+            return;
+        }
+
+        if (!(game instanceof TurrestGameMode01 turrestGame)) {
+            LOG.warn("Game is not TurrestGameMode01");
+            clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
+            return;
+        }
+
+        // Find the player
+        Turrest01Player player = findPlayerBySession(turrestGame, clientSession);
+        if (player == null) {
+            LOG.warn("[TOWER DEBUG] Could not find player for session userId={}", userId);
+            clientSession.sendCommand(new ErrorMessageResponse("Player not found"));
+            return;
+        }
+
+        // Get tower definition
+        TowerDefinition towerDef = TowerDefinition.fromId(towerTypeId);
+        if (towerDef == null) {
+            LOG.warn("Unknown tower type: {}", towerTypeId);
+            clientSession.sendCommand(new ErrorMessageResponse("Unknown tower type"));
+            return;
+        }
+
+        // Get tile
+        Tile tile = turrestGame.getGameMap().getTile(x, y);
+        if (tile == null) {
+            LOG.warn("Invalid tile position: ({}, {})", x, y);
+            clientSession.sendCommand(new ErrorMessageResponse("Invalid position"));
+            return;
+        }
+
+        // Check ownership - player can only build on their own territory
+        if (!tile.canPlayerBuild(player.getPlayerNumber())) {
+            LOG.info("Player {} cannot build tower on tile ({}, {}) - owners: {}",
+                    player.getPlayerNumber(), x, y, tile.getOwners());
+            clientSession.sendCommand(new ErrorMessageResponse("Cannot build on another player's territory"));
+            return;
+        }
+
+        // Validate terrain
+        if (!towerDef.canBuildOn(tile.getTerrainType())) {
+            LOG.info("Cannot build {} on terrain {}", towerDef.getName(), tile.getTerrainType());
+            clientSession.sendCommand(new ErrorMessageResponse(
+                    "Cannot build " + towerDef.getName() + " on " + tile.getTerrainType().name().toLowerCase()));
+            return;
+        }
+
+        // Check for existing structure
+        if (tile.hasStructure()) {
+            LOG.info("Tile already has a structure");
+            clientSession.sendCommand(new ErrorMessageResponse("Tile already occupied"));
+            return;
+        }
+
+        // Check if player can afford
+        PlayerResources resources = player.getResources();
+        if (!resources.canAfford(towerDef.getCost())) {
+            LOG.info("Player cannot afford {}", towerDef.getName());
+            clientSession.sendCommand(new ErrorMessageResponse("Not enough resources"));
+            return;
+        }
+
+        // All checks passed - place the tower
+        resources.subtract(towerDef.getCost());
+
+        // Create tower based on type
+        Tower tower = createTower(towerDef, player.getPlayerNumber(), x, y);
+        turrestGame.getTowerManager().addTower(tower);
+
+        LOG.info("Player {} built {} at ({}, {}) - theoretical rate: {}/s, practical rate: {}/s",
+                player.getPlayerNumber(), towerDef.getName(), x, y,
+                towerDef.getTheoreticalFireRate(),
+                towerDef.getPracticalFireRate(turrestGame.getTickRateMs()));
+
+        // Send resource update to the building player
+        clientSession.sendCommand(new ResourceUpdateResponse(
+                resources.getWood(),
+                resources.getStone(),
+                resources.getGold()
+        ));
+
+        // Broadcast tower placement to all players
+        turrestGame.broadcastToAllPlayers(new TowerPlacedCommand(tower, turrestGame.getTickRateMs()));
+    }
+
+    private Tower createTower(TowerDefinition def, int playerNumber, int x, int y) {
+        return switch (def) {
+            case BASIC_TOWER -> new BasicTower(playerNumber, x, y);
+        };
     }
 
     private Turrest01Player findPlayerBySession(TurrestGameMode01 game, ClientSession session) {
