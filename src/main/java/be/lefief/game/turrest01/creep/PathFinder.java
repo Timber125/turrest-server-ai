@@ -95,8 +95,8 @@ public class PathFinder {
         while (!queue.isEmpty()) {
             Point current = queue.poll();
 
-            // Check if adjacent to castle
-            if (isAdjacent(current, castle)) {
+            // Check if reached the castle tile
+            if (current.equals(castle)) {
                 return reconstructPath(cameFrom, current, spawner);
             }
 

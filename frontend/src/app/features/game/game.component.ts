@@ -2,13 +2,14 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, Hos
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { LobbyService, SocketService, AuthService } from '../../core/services';
-import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep } from '../../shared/models';
+import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry } from '../../shared/models';
 import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
 import { TileInfoComponent } from './components/tile-info/tile-info.component';
 import { ActionPanelComponent } from './components/action-panel/action-panel.component';
 import { MinimapComponent } from './components/minimap/minimap.component';
 import { ResourceBarComponent } from './components/resource-bar/resource-bar.component';
+import { RanklistComponent } from './components/ranklist/ranklist.component';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -20,7 +21,8 @@ import { Subscription } from 'rxjs';
     TileInfoComponent,
     ActionPanelComponent,
     MinimapComponent,
-    ResourceBarComponent
+    ResourceBarComponent,
+    RanklistComponent
   ],
   template: `
     <div class="game-container">
@@ -80,6 +82,9 @@ import { Subscription } from 'rxjs';
                 <h2>{{ gameOverMessage }}</h2>
                 <button class="btn-back-to-lobby" (click)="leaveGame()">Back to Lobby</button>
               </div>
+            }
+            @if (scoreboard.length > 0 && !gameOver) {
+              <app-ranklist class="ranklist-overlay" [players]="scoreboard"></app-ranklist>
             }
           </div>
 
@@ -395,6 +400,13 @@ import { Subscription } from 'rxjs';
       display: flex;
       flex-direction: column;
     }
+
+    .ranklist-overlay {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 50;
+    }
   `]
 })
 export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
@@ -420,6 +432,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   creeps: Map<string, Creep> = new Map();
   gameOver = false;
   gameOverMessage = '';
+
+  // Scoreboard
+  scoreboard: PlayerScoreEntry[] = [];
   private lastFrameTime = 0;
   private animationFrameId: number | null = null;
 
@@ -586,6 +601,13 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         this.ngZone.run(() => this.handleGameOver(cmd.data));
       });
     this.subscriptions.push(gameOverSub);
+
+    // Listen for scoreboard updates
+    const scoreboardSub = this.socketService.onCommand('GAME', 'SCOREBOARD')
+      .subscribe(cmd => {
+        this.ngZone.run(() => this.handleScoreboard(cmd.data));
+      });
+    this.subscriptions.push(scoreboardSub);
   }
 
   private showError(message: string): void {
@@ -931,6 +953,18 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       this.gameOver = true;
       this.gameOverMessage = 'Game Over - Your castle has fallen!';
     }
+  }
+
+  private handleScoreboard(data: Record<string, any>): void {
+    const players = data['players'] as Array<Record<string, any>>;
+    this.scoreboard = players.map(p => ({
+      playerNumber: p['playerNumber'] as number,
+      colorIndex: p['colorIndex'] as number,
+      username: p['username'] as string,
+      score: p['score'] as number,
+      isAlive: p['isAlive'] as boolean
+    }));
+    console.log('Scoreboard updated:', this.scoreboard);
   }
 
   private render(): void {

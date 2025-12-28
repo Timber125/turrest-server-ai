@@ -6,7 +6,7 @@ import lombok.Data;
 import java.util.UUID;
 
 @Data
-public class Player {
+public abstract class Player {
 
     private ClientSession clientSession;
     private Integer playerNumber;
@@ -21,4 +21,15 @@ public class Player {
         this.connected = true;
         this.colorIndex = colorIndex;
     }
+
+    /**
+     * Get the player's score for ranking purposes.
+     * Each game mode defines what "score" means.
+     */
+    public abstract int getScore();
+
+    /**
+     * Get the label for the score (e.g., "HP", "Points", "Gold").
+     */
+    public abstract String getScoreLabel();
 }

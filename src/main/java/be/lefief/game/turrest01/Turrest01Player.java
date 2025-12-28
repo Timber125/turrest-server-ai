@@ -28,4 +28,14 @@ public class Turrest01Player extends Player {
     public boolean isAlive() {
         return hitpoints > 0;
     }
+
+    @Override
+    public int getScore() {
+        return hitpoints;
+    }
+
+    @Override
+    public String getScoreLabel() {
+        return "HP";
+    }
 }

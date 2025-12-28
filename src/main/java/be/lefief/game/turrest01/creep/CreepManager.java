@@ -118,6 +118,9 @@ public class CreepManager {
                             player.getHitpoints()
                     ));
 
+                    // Update scoreboard (score = HP changed)
+                    game.broadcastScoreboard();
+
                     // Check for player death
                     if (!player.isAlive()) {
                         game.handlePlayerDeath(player);

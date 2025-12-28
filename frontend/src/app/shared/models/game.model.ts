@@ -92,3 +92,11 @@ export interface Creep {
   maxHitpoints: number;
   speed: number;          // Tiles per second
 }
+
+export interface PlayerScoreEntry {
+  playerNumber: number;
+  colorIndex: number;
+  username: string;
+  score: number;
+  isAlive: boolean;
+}

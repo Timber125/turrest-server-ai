@@ -81,9 +81,11 @@ public class RoadGenerator {
         while (!queue.isEmpty()) {
             Point current = queue.poll();
 
-            if (isAdjacentTo(current, target)) {
-                // Reconstruct path
+            if (current.equals(target)) {
+                // Reached the target - reconstruct path including start and target
                 Set<Point> path = reconstructPath(level, cameFrom, current);
+                path.add(start);  // Include spawner
+                path.add(target); // Include castle
                 LOG.debug("BFS found path with {} tiles", path.size());
                 return path;
             }
@@ -157,14 +159,12 @@ public class RoadGenerator {
         Set<Point> visited = new HashSet<>();
         Point current = new Point(start.x, start.y);
 
-        // Don't place roads on spawner or castle
         visited.add(start);
-        visited.add(target);
 
         int maxIterations = level.getWidth() * level.getHeight() * 2; // Safety limit
         int iterations = 0;
 
-        while (!isAdjacentTo(current, target) && iterations < maxIterations) {
+        while (!current.equals(target) && iterations < maxIterations) {
             iterations++;
 
             Point next = chooseNextStep(level, current, target, visited);
@@ -174,7 +174,7 @@ public class RoadGenerator {
                 break;
             }
 
-            // Add road at the next position (unless it's a special terrain)
+            // Add road at the next position
             TerrainType terrain = level.getTerrainAt(next.x, next.y);
             if (canPlaceRoad(terrain)) {
                 path.add(next);
@@ -183,6 +183,10 @@ public class RoadGenerator {
             visited.add(next);
             current = next;
         }
+
+        // Include spawner and castle in road positions
+        path.add(start);
+        path.add(target);
 
         return path;
     }
@@ -244,16 +248,8 @@ public class RoadGenerator {
     }
 
     private boolean canPlaceRoad(TerrainType terrain) {
-        // Don't place roads on special tiles
-        return terrain != TerrainType.CASTLE
-                && terrain != TerrainType.SPAWNER
-                && terrain != TerrainType.WATER_SHALLOW
+        // Only exclude water - roads can be placed on spawner/castle tiles
+        return terrain != TerrainType.WATER_SHALLOW
                 && terrain != TerrainType.WATER_DEEP;
-    }
-
-    private boolean isAdjacentTo(Point current, Point target) {
-        int dx = Math.abs(current.x - target.x);
-        int dy = Math.abs(current.y - target.y);
-        return (dx == 1 && dy == 0) || (dx == 0 && dy == 1);
     }
 }

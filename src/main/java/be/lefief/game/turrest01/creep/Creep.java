@@ -42,7 +42,7 @@ public class Creep {
             return;
         }
 
-        double moveDistance = type.getTilesPerSecond() * deltaTime;
+        double moveDistance = type.getTilesPerSecond() * deltaTime * 2.0; // Speed multiplier
 
         while (moveDistance > 0 && currentPathIndex < path.size()) {
             Point target = path.get(currentPathIndex);

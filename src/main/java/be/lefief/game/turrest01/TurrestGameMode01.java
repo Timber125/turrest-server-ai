@@ -6,7 +6,9 @@ import be.lefief.game.map.LevelLoader;
 import be.lefief.game.map.Tile;
 import be.lefief.game.turrest01.commands.FullMapResponse;
 import be.lefief.game.turrest01.commands.GameOverCommand;
+import be.lefief.game.turrest01.commands.PlayerScoreEntry;
 import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
+import be.lefief.game.turrest01.commands.ScoreboardCommand;
 import be.lefief.game.turrest01.commands.TileUpdateResponse;
 import be.lefief.game.turrest01.creep.CreepManager;
 import be.lefief.game.turrest01.map.RoadGenerator;
@@ -20,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import java.awt.Point;
 import java.io.IOException;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class TurrestGameMode01 extends Game<Turrest01Player> {
 
@@ -150,6 +154,28 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
                 ));
             }
         }
+
+        // Send initial scoreboard
+        broadcastScoreboard();
+    }
+
+    /**
+     * Broadcast current scoreboard to all players.
+     * Called after game start and whenever a player's score changes.
+     */
+    public void broadcastScoreboard() {
+        List<PlayerScoreEntry> entries = getPlayerByNumber().values().stream()
+                .sorted(Comparator.comparingInt(Turrest01Player::getScore).reversed())
+                .map(p -> new PlayerScoreEntry(
+                        p.getPlayerNumber(),
+                        p.getColorIndex(),
+                        p.getClientSession() != null ? p.getClientSession().getUserName() : "Player " + p.getPlayerNumber(),
+                        p.getScore(),
+                        p.isAlive()
+                ))
+                .collect(Collectors.toList());
+
+        broadcastToAllPlayers(new ScoreboardCommand(entries));
     }
 
     public GameMap getGameMap() {
@@ -201,6 +227,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
 
     public void handlePlayerDeath(Turrest01Player player) {
         LOG.info("Player {} has been eliminated!", player.getPlayerNumber());
+        broadcastScoreboard();
         broadcastToAllPlayers(new GameOverCommand(player.getPlayerNumber(), false));
 
         // Check if game is over (only one player left)
