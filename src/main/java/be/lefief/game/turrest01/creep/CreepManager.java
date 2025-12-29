@@ -143,6 +143,19 @@ public class CreepManager {
                     }
                 }
 
+                // Award hit reward to sender if this was a player-sent creep
+                Integer senderPlayerNumber = creep.getSpawnedByPlayer();
+                if (senderPlayerNumber != null) {
+                    Turrest01Player sender = game.getPlayerByNumber().get(senderPlayerNumber);
+                    if (sender != null && sender.isAlive()) {
+                        creep.getType().getHitReward().apply(sender);
+                        int rewardGold = creep.getType().getHitReward().getGold();
+                        LOG.info("Creep {} hit castle, awarding {} gold to sender player {}",
+                                creep.getId(), rewardGold, senderPlayerNumber);
+                        game.sendResourceUpdateToPlayer(senderPlayerNumber);
+                    }
+                }
+
                 it.remove();
             } else if (creep.isDead()) {
                 // Creep was killed by towers - award kill reward to the player who owns this section

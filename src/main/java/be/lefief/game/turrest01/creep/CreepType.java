@@ -37,6 +37,14 @@ public enum CreepType {
     }
 
     /**
+     * Get reward for when this creep hits an enemy castle.
+     * Reward is sendCost gold + 5 bonus gold.
+     */
+    public TurrestReward getHitReward() {
+        return TurrestReward.gold(sendCost.getGold() + 5);
+    }
+
+    /**
      * Get tiles per second movement rate.
      * Formula: 10 / speed
      */
