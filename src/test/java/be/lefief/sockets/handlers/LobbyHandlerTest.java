@@ -308,4 +308,68 @@ class LobbyHandlerTest {
         verify(clientSession).sendCommand(captor.capture());
         assertTrue(captor.getValue() instanceof ErrorMessageResponse);
     }
+
+    @Test
+    @DisplayName("Handle add bot successfully adds bot to lobby")
+    void testHandleAddBot_success() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("difficulty", "EASY");
+        AddBotCommand cmd = new AddBotCommand(data);
+        SecuredClientToServerCommand<AddBotCommand> command =
+                new SecuredClientToServerCommand<>(cmd, hostId, hostName);
+
+        Lobby lobby = createTestLobby();
+        when(lobbyService.findLobbyByPlayer(hostId)).thenReturn(lobby);
+
+        lobbyHandler.handleAddBot(command, clientSession);
+
+        // Verify bot was added
+        assertEquals(2, lobby.getPlayers().size());
+        assertTrue(lobby.getPlayers().stream().anyMatch(p -> p.isBot()));
+        // Verify lobby state broadcast
+        verify(lobbyService).emitLobbyCommand(eq(lobby.getLobbyID()), any(LobbyStateResponse.class));
+    }
+
+    @Test
+    @DisplayName("Handle add bot sends error when not in lobby")
+    void testHandleAddBot_notInLobby() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("difficulty", "EASY");
+        AddBotCommand cmd = new AddBotCommand(data);
+        SecuredClientToServerCommand<AddBotCommand> command =
+                new SecuredClientToServerCommand<>(cmd, hostId, hostName);
+
+        when(lobbyService.findLobbyByPlayer(hostId)).thenReturn(null);
+
+        lobbyHandler.handleAddBot(command, clientSession);
+
+        ArgumentCaptor<ServerToClientCommand> captor = ArgumentCaptor.forClass(ServerToClientCommand.class);
+        verify(clientSession).sendCommand(captor.capture());
+        assertTrue(captor.getValue() instanceof ErrorMessageResponse);
+    }
+
+    @Test
+    @DisplayName("Handle add bot sends error when not host")
+    void testHandleAddBot_notHost() {
+        UUID playerId = UUID.randomUUID();
+        Map<String, Object> data = new HashMap<>();
+        data.put("difficulty", "EASY");
+        AddBotCommand cmd = new AddBotCommand(data);
+        SecuredClientToServerCommand<AddBotCommand> command =
+                new SecuredClientToServerCommand<>(cmd, playerId, "Player2");
+
+        Lobby lobby = createTestLobby();
+        lobby.addClient(playerId, "Player2");
+        when(lobbyService.findLobbyByPlayer(playerId)).thenReturn(lobby);
+
+        lobbyHandler.handleAddBot(command, clientSession);
+
+        // Bot should not be added (only 2 players: host + Player2)
+        assertEquals(2, lobby.getPlayers().size());
+        assertFalse(lobby.getPlayers().stream().skip(1).anyMatch(p -> p.isBot()));
+        // Error should be sent
+        ArgumentCaptor<ServerToClientCommand> captor = ArgumentCaptor.forClass(ServerToClientCommand.class);
+        verify(clientSession).sendCommand(captor.capture());
+        assertTrue(captor.getValue() instanceof ErrorMessageResponse);
+    }
 }

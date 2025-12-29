@@ -117,4 +117,23 @@ public class GameService {
             LOG.info("Game {} (from lobby {}) cleaned up", gameId, game.getLobbyHostId());
         }
     }
+
+    /**
+     * Get the number of active games.
+     */
+    public int getActiveGameCount() {
+        return (int) games.values().stream()
+                .filter(Game::isGameIsRunning)
+                .count();
+    }
+
+    /**
+     * Get the number of online players (in active games).
+     */
+    public int getOnlinePlayerCount() {
+        return (int) games.values().stream()
+                .filter(Game::isGameIsRunning)
+                .mapToLong(Game::getActiveConnectedPlayersCount)
+                .sum();
+    }
 }

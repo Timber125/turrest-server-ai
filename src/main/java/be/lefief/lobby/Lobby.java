@@ -192,4 +192,66 @@ public class Lobby {
         started = true;
         open = false;
     }
+
+    /**
+     * Add a bot player to the lobby.
+     * @param difficulty The bot difficulty (EASY, MEDIUM, HARD)
+     * @param requesterId The user requesting to add a bot (must be host)
+     * @return true if the bot was added successfully
+     */
+    public boolean addBot(String difficulty, UUID requesterId) {
+        // Only host can add bots
+        if (!requesterId.equals(hostId)) {
+            return false;
+        }
+        // Cannot add bots after game started
+        if (started) {
+            return false;
+        }
+        // Check if lobby is full
+        if (players.size() >= maxplayers || players.size() >= SERVERSIDE_MAX_PLAYERS) {
+            return false;
+        }
+
+        int colorIndex = findNextAvailableColor();
+        LobbyPlayer bot = LobbyPlayer.createBot(difficulty, colorIndex);
+        players.add(bot);
+        checkIfOpen();
+        return true;
+    }
+
+    /**
+     * Remove a bot player from the lobby.
+     * @param botId The ID of the bot to remove
+     * @param requesterId The user requesting to remove the bot (must be host)
+     * @return true if the bot was removed successfully
+     */
+    public boolean removeBot(UUID botId, UUID requesterId) {
+        // Only host can remove bots
+        if (!requesterId.equals(hostId)) {
+            return false;
+        }
+        // Cannot remove bots after game started
+        if (started) {
+            return false;
+        }
+
+        LobbyPlayer player = getPlayer(botId);
+        if (player == null || !player.isBot()) {
+            return false;
+        }
+
+        players.removeIf(p -> p.getId().equals(botId));
+        checkIfOpen();
+        return true;
+    }
+
+    /**
+     * Get all bot players in the lobby.
+     */
+    public List<LobbyPlayer> getBots() {
+        return players.stream()
+                .filter(LobbyPlayer::isBot)
+                .collect(Collectors.toList());
+    }
 }

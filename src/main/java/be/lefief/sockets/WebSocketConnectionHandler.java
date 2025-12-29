@@ -2,6 +2,7 @@ package be.lefief.sockets;
 
 import be.lefief.game.GameService;
 import be.lefief.sockets.commands.ClientToServerCommand;
+import be.lefief.sockets.commands.client.reception.ErrorMessageResponse;
 import be.lefief.sockets.handlers.routing.CommandRouter;
 import be.lefief.util.CommandSerializer;
 import org.slf4j.Logger;
@@ -28,11 +29,13 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
 
     private final CommandRouter commandRouter;
     private final GameService gameService;
+    private final RateLimiter rateLimiter;
     private final Map<String, WebSocketClientSession> sessions = new ConcurrentHashMap<>();
 
-    public WebSocketConnectionHandler(CommandRouter commandRouter, GameService gameService) {
+    public WebSocketConnectionHandler(CommandRouter commandRouter, GameService gameService, RateLimiter rateLimiter) {
         this.commandRouter = commandRouter;
         this.gameService = gameService;
+        this.rateLimiter = rateLimiter;
     }
 
     @Override
@@ -49,6 +52,14 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
                     clientSession.getRemoteAddress(),
                     message);
 
+            // Rate limiting check
+            UUID userId = clientSession.getUserId();
+            if (!rateLimiter.allowCommand(userId)) {
+                LOG.warn("Rate limit exceeded for user {}", userId);
+                clientSession.sendCommand(new ErrorMessageResponse("Too many commands, please slow down"));
+                return;
+            }
+
             ClientToServerCommand command = CommandSerializer.deserializeClientToServerCommand(message);
             if (command != null) {
                 commandRouter.handle(command, clientSession);
@@ -62,6 +73,7 @@ public class WebSocketConnectionHandler extends TextWebSocketHandler {
             sessions.remove(session.getId());
             if (userId != null) {
                 gameService.handlePlayerDisconnect(userId);
+                rateLimiter.removeUser(userId);
             }
         });
     }

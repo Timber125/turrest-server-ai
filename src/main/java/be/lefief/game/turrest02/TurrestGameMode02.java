@@ -1,6 +1,8 @@
 package be.lefief.game.turrest02;
 
 import be.lefief.game.Game;
+import be.lefief.game.ai.BotManager;
+import be.lefief.game.ai.BotSession;
 import be.lefief.game.map.GameMap;
 import be.lefief.game.map.LevelLoader;
 import be.lefief.game.map.Tile;
@@ -40,6 +42,7 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
     private GameMap gameMap;
     private CreepManager creepManager;
     private TowerManager towerManager;
+    private BotManager botManager;
     private GameStats gameStats;
     private ScheduledExecutorService gameLoop;
     private boolean running;
@@ -65,6 +68,15 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
 
         // Initialize game stats
         gameStats = new GameStats();
+
+        // Initialize bot manager and register bot players
+        botManager = new BotManager();
+        for (Turrest02Player player : getPlayerByNumber().values()) {
+            if (player.getClientSession() instanceof BotSession) {
+                // Default to EASY difficulty for now
+                botManager.registerBot(player.getPlayerNumber(), BotManager.BotDifficulty.EASY);
+            }
+        }
 
         try {
             // 1. Send countdown to players
@@ -110,25 +122,59 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
     protected void resyncPlayer(Turrest02Player player) {
         if (gameMap == null || player.getClientSession() == null)
             return;
-        LOG.info("Resyncing player {}", player.getPlayerNumber());
+        LOG.info("Resyncing player {} after reconnection", player.getPlayerNumber());
+        ClientSession session = player.getClientSession();
 
-        // Send full map with structure data
-        for (int x = 0; x < gameMap.getWidth(); x++) {
-            for (int y = 0; y < gameMap.getHeight(); y++) {
-                Tile tile = gameMap.getTile(x, y);
-                if (tile != null) {
-                    player.getClientSession().sendCommand(new TileUpdateResponse(x, y, tile));
-                }
+        // 1. Send player info
+        session.sendCommand(new PlayerInfoResponse(player.getPlayerNumber(), player.getColorIndex()));
+
+        // 2. Build playerNumber -> colorIndex mapping for contour rendering
+        Map<Integer, Integer> playerColorMap = new HashMap<>();
+        for (Turrest02Player p : getPlayerByNumber().values()) {
+            playerColorMap.put(p.getPlayerNumber(), p.getColorIndex());
+        }
+
+        // 3. Send full map in one command (faster than tile-by-tile)
+        session.sendCommand(new FullMapResponse(gameMap, playerColorMap));
+
+        // 4. Send all placed towers
+        if (towerManager != null) {
+            for (var tower : towerManager.getAllTowers()) {
+                session.sendCommand(new TowerPlacedCommand(tower, TICK_RATE_MS));
             }
         }
 
-        // Send current resources - no instanceof needed!
+        // 5. Send current resources
         PlayerResources resources = player.getResources();
-        player.getClientSession().sendCommand(new ResourceUpdateResponse(
+        session.sendCommand(new ResourceUpdateResponse(
                 resources.getWood(),
                 resources.getStone(),
                 resources.getGold()
         ));
+
+        // 6. Send HP updates for all players
+        for (Turrest02Player p : getPlayerByNumber().values()) {
+            session.sendCommand(new PlayerHpUpdateCommand(p.getPlayerNumber(), p.getHitpoints()));
+        }
+
+        // 7. Send current scoreboard
+        List<PlayerScoreEntry> entries = getPlayerByNumber().values().stream()
+                .sorted(Comparator.comparingInt(Turrest02Player::getScore).reversed())
+                .map(p -> new PlayerScoreEntry(
+                        p.getPlayerNumber(),
+                        p.getColorIndex(),
+                        p.getClientSession() != null ? p.getClientSession().getUserName() : "Player " + p.getPlayerNumber(),
+                        p.getScore(),
+                        p.isAlive()
+                ))
+                .collect(Collectors.toList());
+        session.sendCommand(new ScoreboardCommand(entries));
+
+        // 8. Notify other players of reconnection
+        broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.DisplayChatCommand(
+                session.getUserName() + " has reconnected!"));
+
+        LOG.info("Resync complete for player {}", player.getPlayerNumber());
     }
 
     private void sendInitialMapToPlayers() {
@@ -280,6 +326,11 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
                 towerManager.tick(this);
             }
 
+            // Process bot AI decisions
+            if (botManager != null) {
+                botManager.tick(this, tickCount);
+            }
+
             // Process resource production and updates every RESOURCE_UPDATE_INTERVAL ticks (1 second at 5Hz)
             if (resourceTickCounter >= RESOURCE_UPDATE_INTERVAL) {
                 resourceTickCounter = 0;
@@ -297,6 +348,9 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
                         ));
                     }
                 }
+
+                // Check grace periods for disconnected players (every 1 second)
+                checkGracePeriods();
             }
 
             if (tickCount % 25 == 0) { // Log every 5 seconds (25 ticks at 5Hz)
@@ -340,17 +394,27 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
 
     @Override
     public void handlePlayerDisconnect(UUID userId) {
-        // Find the disconnecting player
-        Turrest02Player disconnectedPlayer = null;
+        // Find the disconnecting player and mark as disconnected with timestamp
         for (Turrest02Player player : getPlayerByNumber().values()) {
             if (player.getClientSession() != null && userId.equals(player.getClientSession().getUserId())) {
-                disconnectedPlayer = player;
-                player.setConnected(false);
+                LOG.info("Player {} disconnected, starting 60s grace period", player.getPlayerNumber());
+                player.markDisconnected();
+                broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.DisplayChatCommand(
+                        player.getClientSession().getUserName() + " disconnected. Waiting 60s for reconnection..."));
+                broadcastScoreboard();
                 break;
             }
         }
+        // Grace period check will happen in game tick
+    }
 
+    @Override
+    protected void onPlayerGracePeriodExpired(Turrest02Player player) {
         if (!isGameIsRunning()) return;
+
+        LOG.info("Player {} grace period expired, treating as forfeit", player.getPlayerNumber());
+        broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.DisplayChatCommand(
+                "Player " + player.getPlayerNumber() + " forfeited (disconnect timeout)"));
 
         // Check for winner by forfeit
         long connectedCount = getActiveConnectedPlayersCount();
@@ -361,17 +425,10 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
                     .orElse(null);
 
             if (winner != null) {
-                LOG.info("Game over! Player {} wins by forfeit (opponent disconnected)", winner.getPlayerNumber());
-
-                // Send game over to disconnected player (loser)
-                if (disconnectedPlayer != null) {
-                    broadcastToAllPlayers(new GameOverCommand(disconnectedPlayer.getPlayerNumber(), false));
-                }
-
-                // Send winner announcement
+                LOG.info("Game over! Player {} wins by forfeit", winner.getPlayerNumber());
+                broadcastToAllPlayers(new GameOverCommand(player.getPlayerNumber(), false));
                 broadcastToAllPlayers(new GameOverCommand(winner.getPlayerNumber(), true));
 
-                // Save winner ID for persistent stats
                 if (winner.getClientSession() != null) {
                     winnerId = winner.getClientSession().getUserId();
                 }

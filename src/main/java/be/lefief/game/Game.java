@@ -88,8 +88,12 @@ public abstract class Game<T extends Player> {
         for (T player : playerByNumber.values()) {
             ClientSession oldSession = player.getClientSession();
             if (oldSession != null && userId.equals(oldSession.getUserId())) {
+                LOG.info("Player {} reconnecting (was disconnected for {}ms)",
+                        player.getPlayerNumber(),
+                        player.getDisconnectedAt() != null ?
+                                System.currentTimeMillis() - player.getDisconnectedAt().toEpochMilli() : 0);
                 player.setClientSession(newSession);
-                player.setConnected(true);
+                player.markReconnected();
                 resyncPlayer(player);
                 return;
             }
@@ -99,10 +103,43 @@ public abstract class Game<T extends Player> {
     public void handlePlayerDisconnect(UUID userId) {
         for (T player : playerByNumber.values()) {
             if (player.getClientSession() != null && userId.equals(player.getClientSession().getUserId())) {
-                player.setConnected(false);
+                LOG.info("Player {} disconnected, starting grace period", player.getPlayerNumber());
+                player.markDisconnected();
+                broadcastToAllPlayers(new be.lefief.sockets.commands.client.reception.DisplayChatCommand(
+                        player.getClientSession().getUserName() + " disconnected. Waiting for reconnection..."));
+            }
+        }
+        // Don't immediately check win condition - let grace period timer handle it
+        scheduleGracePeriodCheck();
+    }
+
+    /**
+     * Schedule a check for expired grace periods.
+     */
+    protected void scheduleGracePeriodCheck() {
+        // Default implementation checks immediately
+        // Subclasses can override for scheduled checks
+        checkGracePeriods();
+    }
+
+    /**
+     * Check if any disconnected players have exceeded their grace period.
+     */
+    protected void checkGracePeriods() {
+        for (T player : playerByNumber.values()) {
+            if (player.isGracePeriodExpired()) {
+                LOG.info("Player {} grace period expired, treating as forfeit", player.getPlayerNumber());
+                onPlayerGracePeriodExpired(player);
             }
         }
         checkWinCondition();
+    }
+
+    /**
+     * Called when a player's grace period expires. Can be overridden by subclasses.
+     */
+    protected void onPlayerGracePeriodExpired(T player) {
+        // Default: just log, checkWinCondition will handle the rest
     }
 
     private void checkWinCondition() {

@@ -23,10 +23,11 @@
       "Bash(where mvn:*)",
       "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" compile:*)",
       "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\":*)",
+      "Bash(cd /c/Users/timil/IdeaProjects/turrest-server-ai && JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\":*)",
       "Bash(mvn:*)",
       "mcp__plugin_playwright_playwright__browser_close",
       "Bash(npx ng build:*)",
-      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browarser_navigate",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "Bash(taskkill:*)",
       "mcp__plugin_playwright_playwright__browser_wait_for",
@@ -46,7 +47,14 @@
       "Bash(\"C:\\Users\\timil\\.claude\\plugins\\cache\\claude-plugins-official\\ralph-wiggum\":*)",
       "Skill(ralph-wiggum:ralph-loop)",
       "Skill(ralph-wiggum:*)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(JAVA_HOME=\".jdk\" \".jdk/bin/java\":*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/IdeaProjects/turrest-server-ai/.jdk\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" test:*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/IdeaProjects/turrest-server-ai/.jdk\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" compile:*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/IdeaProjects/turrest-server-ai/.jdk\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" spring-boot:run:*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/IdeaProjects/turrest-server-ai/.jdk\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" flyway:repair:*)",
+      "Bash(netstat:*)",
+      "mcp__plugin_playwright_playwright__browser_navigate"
     ]
   }
 }

@@ -1,6 +1,5 @@
 package be.lefief.game.turrest02.handlers;
 
-import be.lefief.game.Game;
 import be.lefief.game.GameService;
 import be.lefief.game.map.Tile;
 import be.lefief.game.turrest02.Turrest02Player;
@@ -18,6 +17,8 @@ import be.lefief.game.turrest02.structure.TurrestBuilding;
 import be.lefief.game.turrest02.tower.GenericTower;
 import be.lefief.game.turrest02.tower.Tower;
 import be.lefief.game.turrest02.tower.TowerDefinition;
+import be.lefief.game.validation.CommandValidator;
+import be.lefief.game.validation.ValidationResult;
 import be.lefief.sockets.ClientSession;
 import be.lefief.sockets.SecuredClientToServerCommand;
 import be.lefief.sockets.commands.client.reception.ErrorMessageResponse;
@@ -32,9 +33,11 @@ public class Turrest02GameHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(Turrest02GameHandler.class);
     private final GameService gameService;
+    private final CommandValidator commandValidator;
 
-    public Turrest02GameHandler(GameService gameService) {
+    public Turrest02GameHandler(GameService gameService, CommandValidator commandValidator) {
         this.gameService = gameService;
+        this.commandValidator = commandValidator;
     }
 
     public void handlePlaceBuilding(SecuredClientToServerCommand<PlaceBuildingCommand> command, ClientSession clientSession) {
@@ -47,17 +50,16 @@ public class Turrest02GameHandler {
         LOG.info("[BUILD DEBUG] Player '{}' (userId={}) attempting to place building type {} at ({}, {})",
                 command.getUserName(), userId, buildingTypeId, x, y);
 
-        // Get the game for this player
-        Game<?> game = gameService.getGameByUserId(userId);
-
-        if (game == null) {
-            LOG.warn("No game found for user {}", userId);
-            clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
+        // Validate player can act
+        ValidationResult canAct = commandValidator.validatePlayerCanAct(userId);
+        if (canAct.isInvalid()) {
+            clientSession.sendCommand(new ErrorMessageResponse(canAct.getErrorMessage()));
             return;
         }
 
-        if (!(game instanceof TurrestGameMode02 turrestGame)) {
-            LOG.warn("Game is not TurrestGameMode01");
+        // Get the game for this player
+        TurrestGameMode02 turrestGame = commandValidator.getValidTurrest02Game(userId);
+        if (turrestGame == null) {
             clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
             return;
         }
@@ -66,14 +68,13 @@ public class Turrest02GameHandler {
         LOG.debug("[BUILD DEBUG] Game has {} players: {}",
                 turrestGame.getPlayerByNumber().size(),
                 turrestGame.getPlayerByNumber().keySet());
-        Turrest02Player player = findPlayerBySession(turrestGame, clientSession);
-        if (player == null) {
-            LOG.warn("[BUILD DEBUG] Could not find player for session userId={}, game players: {}",
-                    userId, turrestGame.getPlayerByNumber().values().stream()
-                            .map(p -> "Player" + p.getPlayerNumber() + "(clientID=" +
-                                    (p.getClientSession() != null ? p.getClientSession().getUserId() : "null") + ")")
-                            .toList());
-            clientSession.sendCommand(new ErrorMessageResponse("Player not found"));
+        Turrest02Player player = commandValidator.findPlayerBySession(turrestGame, clientSession);
+
+        // Validate player is alive
+        ValidationResult playerAlive = commandValidator.validatePlayerIsAlive(player);
+        if (playerAlive.isInvalid()) {
+            LOG.warn("[BUILD DEBUG] Player validation failed: {}", playerAlive.getErrorMessage());
+            clientSession.sendCommand(new ErrorMessageResponse(playerAlive.getErrorMessage()));
             return;
         }
         LOG.info("[BUILD DEBUG] Found player {} for userId={}", player.getPlayerNumber(), userId);
@@ -171,26 +172,26 @@ public class Turrest02GameHandler {
         LOG.info("[TOWER DEBUG] Player '{}' (userId={}) attempting to place tower type {} at ({}, {})",
                 command.getUserName(), userId, towerTypeId, x, y);
 
-        // Get the game for this player
-        Game<?> game = gameService.getGameByUserId(userId);
-
-        if (game == null) {
-            LOG.warn("No game found for user {}", userId);
-            clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
+        // Validate player can act
+        ValidationResult canAct = commandValidator.validatePlayerCanAct(userId);
+        if (canAct.isInvalid()) {
+            clientSession.sendCommand(new ErrorMessageResponse(canAct.getErrorMessage()));
             return;
         }
 
-        if (!(game instanceof TurrestGameMode02 turrestGame)) {
-            LOG.warn("Game is not TurrestGameMode01");
+        // Get the game for this player
+        TurrestGameMode02 turrestGame = commandValidator.getValidTurrest02Game(userId);
+        if (turrestGame == null) {
             clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
             return;
         }
 
-        // Find the player
-        Turrest02Player player = findPlayerBySession(turrestGame, clientSession);
-        if (player == null) {
-            LOG.warn("[TOWER DEBUG] Could not find player for session userId={}", userId);
-            clientSession.sendCommand(new ErrorMessageResponse("Player not found"));
+        // Find the player and validate alive
+        Turrest02Player player = commandValidator.findPlayerBySession(turrestGame, clientSession);
+        ValidationResult playerAlive = commandValidator.validatePlayerIsAlive(player);
+        if (playerAlive.isInvalid()) {
+            LOG.warn("[TOWER DEBUG] Player validation failed: {}", playerAlive.getErrorMessage());
+            clientSession.sendCommand(new ErrorMessageResponse(playerAlive.getErrorMessage()));
             return;
         }
 
@@ -291,26 +292,26 @@ public class Turrest02GameHandler {
         LOG.info("[SEND CREEP] Player '{}' (userId={}) attempting to send creep type '{}'",
                 command.getUserName(), userId, creepTypeId);
 
-        // Get the game for this player
-        Game<?> game = gameService.getGameByUserId(userId);
-
-        if (game == null) {
-            LOG.warn("No game found for user {}", userId);
-            clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
+        // Validate player can act
+        ValidationResult canAct = commandValidator.validatePlayerCanAct(userId);
+        if (canAct.isInvalid()) {
+            clientSession.sendCommand(new ErrorMessageResponse(canAct.getErrorMessage()));
             return;
         }
 
-        if (!(game instanceof TurrestGameMode02 turrestGame)) {
-            LOG.warn("Game is not TurrestGameMode01");
+        // Get the game for this player
+        TurrestGameMode02 turrestGame = commandValidator.getValidTurrest02Game(userId);
+        if (turrestGame == null) {
             clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
             return;
         }
 
-        // Find the player
-        Turrest02Player player = findPlayerBySession(turrestGame, clientSession);
-        if (player == null) {
-            LOG.warn("[SEND CREEP] Could not find player for session userId={}", userId);
-            clientSession.sendCommand(new ErrorMessageResponse("Player not found"));
+        // Find the player and validate alive
+        Turrest02Player player = commandValidator.findPlayerBySession(turrestGame, clientSession);
+        ValidationResult playerAlive = commandValidator.validatePlayerIsAlive(player);
+        if (playerAlive.isInvalid()) {
+            LOG.warn("[SEND CREEP] Player validation failed: {}", playerAlive.getErrorMessage());
+            clientSession.sendCommand(new ErrorMessageResponse(playerAlive.getErrorMessage()));
             return;
         }
 
@@ -363,39 +364,14 @@ public class Turrest02GameHandler {
         UUID userId = clientSession.getUserId();
         LOG.debug("[GET STATS] Player '{}' (userId={}) requesting stats", command.getUserName(), userId);
 
-        // Get the game for this player
-        Game<?> game = gameService.getGameByUserId(userId);
-
-        if (game == null) {
-            LOG.warn("No game found for user {}", userId);
+        // Get the game for this player (stats can be requested even if game not running)
+        TurrestGameMode02 turrestGame = commandValidator.getValidTurrest02Game(userId);
+        if (turrestGame == null) {
             clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
-            return;
-        }
-
-        if (!(game instanceof TurrestGameMode02 turrestGame)) {
-            LOG.warn("Game is not TurrestGameMode01");
-            clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
             return;
         }
 
         // Send stats response to the requesting player
         clientSession.sendCommand(new StatsResponseCommand(turrestGame.getGameStats()));
-    }
-
-    private Turrest02Player findPlayerBySession(TurrestGameMode02 game, ClientSession session) {
-        UUID lookingFor = session.getUserId();
-        LOG.debug("[BUILD DEBUG] Looking for player with clientID={}", lookingFor);
-        for (Turrest02Player player : game.getPlayerByNumber().values()) {
-            ClientSession playerSession = player.getClientSession();
-            UUID playerId = playerSession != null ? playerSession.getUserId() : null;
-            LOG.debug("[BUILD DEBUG] Checking player {} - userId={}, match={}",
-                    player.getPlayerNumber(), playerId,
-                    playerId != null && playerId.equals(lookingFor));
-            if (playerSession != null && lookingFor.equals(playerId)) {
-                return player;
-            }
-        }
-        LOG.warn("[BUILD DEBUG] No player found for session clientID={}", lookingFor);
-        return null;
     }
 }

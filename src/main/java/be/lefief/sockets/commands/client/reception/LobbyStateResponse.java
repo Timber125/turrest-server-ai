@@ -35,6 +35,8 @@ public class LobbyStateResponse extends ServerToClientCommand {
             playerData.put("name", player.getName());
             playerData.put("colorIndex", player.getColorIndex());
             playerData.put("ready", player.isReady());
+            playerData.put("isBot", player.isBot());
+            playerData.put("botDifficulty", player.getBotDifficulty());
             players.add(playerData);
         }
         data.put("players", players);
