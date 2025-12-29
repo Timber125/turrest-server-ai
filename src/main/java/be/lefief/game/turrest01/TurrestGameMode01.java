@@ -226,6 +226,16 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         }
     }
 
+    /**
+     * Send a command to a specific player by player number.
+     */
+    public void sendToPlayer(int playerNumber, be.lefief.sockets.commands.ServerToClientCommand command) {
+        Turrest01Player player = getPlayerByNumber().get(playerNumber);
+        if (player != null && player.isConnected()) {
+            player.getClientSession().sendCommand(command);
+        }
+    }
+
     public CreepManager getCreepManager() {
         return creepManager;
     }

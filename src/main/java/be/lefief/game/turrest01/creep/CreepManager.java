@@ -7,6 +7,8 @@ import be.lefief.game.turrest01.commands.BatchedCreepUpdateCommand;
 import be.lefief.game.turrest01.commands.BatchedSpawnCreepCommand;
 import be.lefief.game.turrest01.commands.DespawnCreepCommand;
 import be.lefief.game.turrest01.commands.PlayerTakesDamageCommand;
+import be.lefief.game.turrest01.commands.ResourceEventCommand;
+import be.lefief.game.turrest01.resource.ResourceEventType;
 import be.lefief.game.turrest01.wave.Wave;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -153,6 +155,14 @@ public class CreepManager {
                         LOG.info("Creep {} hit castle, awarding {} gold to sender player {}",
                                 creep.getId(), rewardGold, senderPlayerNumber);
                         game.sendResourceUpdateToPlayer(senderPlayerNumber);
+
+                        // Send resource event animation for hit reward
+                        game.sendToPlayer(senderPlayerNumber, new ResourceEventCommand(
+                                ResourceEventType.CREEP_HIT_CASTLE,
+                                creep.getType().getHitReward(),
+                                creep.getX(), creep.getY(),
+                                senderPlayerNumber
+                        ));
                     }
                 }
 
@@ -163,6 +173,14 @@ public class CreepManager {
                 Turrest01Player player = game.getPlayerByNumber().get(playerNum);
                 if (player != null) {
                     creep.getType().getKillReward().apply(player);
+
+                    // Send resource event animation for kill reward
+                    game.sendToPlayer(playerNum, new ResourceEventCommand(
+                            ResourceEventType.CREEP_KILL,
+                            creep.getType().getKillReward(),
+                            creep.getX(), creep.getY(),
+                            playerNum
+                    ));
                 }
 
                 int goldReward = creep.getType().getGoldReward();

@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { LobbyService, SocketService, AuthService } from '../../core/services';
+import { LobbyService, SocketService, AuthService, AudioService } from '../../core/services';
 import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry, Tower, TowerAttack, TowerDefinition, TOWER_DEFINITIONS, CreepDefinition } from '../../shared/models';
 import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
@@ -12,6 +12,21 @@ import { MinimapComponent } from './components/minimap/minimap.component';
 import { ResourceBarComponent } from './components/resource-bar/resource-bar.component';
 import { RanklistComponent } from './components/ranklist/ranklist.component';
 import { Subscription } from 'rxjs';
+
+// Enhanced floating text interface for multi-resource animations
+interface FloatingTextEntry {
+  text: string;        // "+15" or "-80"
+  icon: string;        // Resource icon
+  color: string;       // Resource-specific color
+}
+
+interface FloatingText {
+  x: number;
+  y: number;
+  age: number;
+  eventType: string;   // Event type for animation style
+  entries: FloatingTextEntry[];
+}
 
 @Component({
   selector: 'app-game',
@@ -454,8 +469,32 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   towers: Map<string, Tower> = new Map();
   activeAttacks: TowerAttack[] = [];
 
-  // Floating text (gold rewards, etc.)
-  floatingTexts: { x: number; y: number; text: string; color: string; age: number }[] = [];
+  // Floating text (resource events - rewards/costs)
+  floatingTexts: FloatingText[] = [];
+
+  // Resource colors and icons for animations
+  private readonly RESOURCE_COLORS = {
+    gold: '#FFD700',
+    wood: '#8B4513',
+    stone: '#708090',
+    hitpoints: '#FF4444'
+  };
+
+  private readonly RESOURCE_ICONS = {
+    gold: '●',
+    wood: '▲',
+    stone: '■',
+    hitpoints: '♥'
+  };
+
+  // Event-specific sounds (will be loaded in AudioService)
+  private readonly EVENT_SOUNDS: Record<string, string> = {
+    kill: 'coin',
+    hit: 'coin',
+    build: 'build',
+    tower: 'tower',
+    send: 'send'
+  };
 
   // Scoreboard
   scoreboard: PlayerScoreEntry[] = [];
@@ -526,7 +565,8 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     public authService: AuthService,
     private socketService: SocketService,
     private router: Router,
-    private ngZone: NgZone
+    private ngZone: NgZone,
+    private audioService: AudioService
   ) { }
 
   ngOnInit(): void {
@@ -661,6 +701,13 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         this.handleTowerAttacks(cmd.data);
       });
     this.subscriptions.push(towerAttackSub);
+
+    // Listen for resource events (rewards/costs animations)
+    const resourceEventSub = this.socketService.onCommand('GAME', 'RESOURCE_EVENT')
+      .subscribe(cmd => {
+        this.handleResourceEvent(cmd.data);
+      });
+    this.subscriptions.push(resourceEventSub);
   }
 
   private showError(message: string): void {
@@ -1035,21 +1082,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private handleDespawnCreep(data: Record<string, any>): void {
     const creepId = data['creepId'] as string;
-    const goldAwarded = data['goldAwarded'] as number || 0;
-    const awardedToPlayer = data['awardedToPlayer'] as number ?? -1;
-    const x = data['x'] as number;
-    const y = data['y'] as number;
-
-    // Show floating gold text if gold was awarded to current player
-    if (goldAwarded > 0 && awardedToPlayer === this.myPlayerNumber) {
-      this.floatingTexts.push({
-        x: x,
-        y: y,
-        text: `+${goldAwarded}`,
-        color: '#FFD700',
-        age: 0
-      });
-    }
+    // Note: gold display is now handled by ResourceEventCommand
+    // The goldAwarded/awardedToPlayer are kept for backwards compatibility
+    // but the actual floating text is triggered by the separate RESOURCE_EVENT
 
     this.creeps.delete(creepId);
   }
@@ -1087,6 +1122,72 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         bulletType: attack['bulletType'] as string,
         progress: 0
       });
+    }
+  }
+
+  private handleResourceEvent(data: Record<string, any>): void {
+    const eventType = data['eventType'] as string;
+    const wood = data['wood'] as number;
+    const stone = data['stone'] as number;
+    const gold = data['gold'] as number;
+    const hitpoints = data['hitpoints'] as number;
+    const playerNumber = data['playerNumber'] as number;
+    let x = data['x'] as number;
+    let y = data['y'] as number;
+
+    // Only show animation for current player's events
+    if (playerNumber !== this.myPlayerNumber) return;
+
+    // Handle special coordinates for SEND_CREEP (show at screen center)
+    if (x < 0 || y < 0) {
+      const canvas = this.canvasRef.nativeElement;
+      x = (this.cameraX + canvas.width / 2) / this.tileSize;
+      y = (this.cameraY + canvas.height / 2) / this.tileSize;
+    }
+
+    // Build entries for each resource that changed
+    const entries: FloatingTextEntry[] = [];
+
+    if (gold !== 0) {
+      entries.push({
+        text: gold > 0 ? `+${gold}` : `${gold}`,
+        icon: this.RESOURCE_ICONS.gold,
+        color: gold > 0 ? this.RESOURCE_COLORS.gold : '#FF6666'
+      });
+    }
+    if (wood !== 0) {
+      entries.push({
+        text: wood > 0 ? `+${wood}` : `${wood}`,
+        icon: this.RESOURCE_ICONS.wood,
+        color: wood > 0 ? this.RESOURCE_COLORS.wood : '#FF6666'
+      });
+    }
+    if (stone !== 0) {
+      entries.push({
+        text: stone > 0 ? `+${stone}` : `${stone}`,
+        icon: this.RESOURCE_ICONS.stone,
+        color: stone > 0 ? this.RESOURCE_COLORS.stone : '#FF6666'
+      });
+    }
+    if (hitpoints !== 0) {
+      entries.push({
+        text: hitpoints > 0 ? `+${hitpoints}` : `${hitpoints}`,
+        icon: this.RESOURCE_ICONS.hitpoints,
+        color: hitpoints > 0 ? '#44FF44' : this.RESOURCE_COLORS.hitpoints
+      });
+    }
+
+    if (entries.length > 0) {
+      this.floatingTexts.push({
+        x,
+        y,
+        age: 0,
+        eventType,
+        entries
+      });
+
+      // Play sound for this event type
+      this.audioService.playForEvent(eventType);
     }
   }
 
@@ -1300,25 +1401,70 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private drawFloatingTexts(): void {
     const maxAge = 1.5;
+    const lineHeight = this.tileSize * 0.4;
+    const iconWidth = this.tileSize * 0.35;
+
     for (const ft of this.floatingTexts) {
       const screenX = ft.x * this.tileSize - this.cameraX;
-      const screenY = ft.y * this.tileSize - this.cameraY;
+      let screenY = ft.y * this.tileSize - this.cameraY;
 
       // Fade out as age increases
       const alpha = 1 - (ft.age / maxAge);
 
-      this.ctx.font = `bold ${this.tileSize * 0.5}px Arial`;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
+      // Calculate starting Y to center all entries
+      const totalHeight = ft.entries.length * lineHeight;
+      let yOffset = -totalHeight / 2;
 
-      // Draw shadow
-      this.ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.7})`;
-      this.ctx.fillText(ft.text, screenX + 1, screenY + 1);
+      for (const entry of ft.entries) {
+        const entryY = screenY + yOffset;
 
-      // Draw text
-      this.ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
-      this.ctx.fillText(ft.text, screenX, screenY);
+        // Parse color to add alpha
+        const colorWithAlpha = this.colorToRgba(entry.color, alpha);
+        const shadowAlpha = alpha * 0.7;
+
+        // Draw icon
+        this.ctx.font = `${this.tileSize * 0.35}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+
+        // Icon shadow
+        this.ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        this.ctx.fillText(entry.icon, screenX - iconWidth / 2 + 1, entryY + 1);
+
+        // Icon
+        this.ctx.fillStyle = colorWithAlpha;
+        this.ctx.fillText(entry.icon, screenX - iconWidth / 2, entryY);
+
+        // Draw text value
+        this.ctx.font = `bold ${this.tileSize * 0.35}px Arial`;
+        this.ctx.textAlign = 'left';
+
+        // Text shadow
+        this.ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+        this.ctx.fillText(entry.text, screenX + 1, entryY + 1);
+
+        // Text
+        this.ctx.fillStyle = colorWithAlpha;
+        this.ctx.fillText(entry.text, screenX, entryY);
+
+        yOffset += lineHeight;
+      }
     }
+  }
+
+  private colorToRgba(hexColor: string, alpha: number): string {
+    // Handle already rgba colors
+    if (hexColor.startsWith('rgba')) return hexColor;
+    if (hexColor.startsWith('rgb')) {
+      return hexColor.replace('rgb', 'rgba').replace(')', `, ${alpha})`);
+    }
+
+    // Convert hex to rgba
+    const hex = hexColor.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   private drawTile(tile: Tile): void {

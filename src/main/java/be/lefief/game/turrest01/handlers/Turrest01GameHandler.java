@@ -9,9 +9,11 @@ import be.lefief.game.turrest01.building.BuildingDefinition;
 import be.lefief.game.turrest01.commands.BuildingChangedResponse;
 import be.lefief.game.turrest01.commands.PlaceBuildingCommand;
 import be.lefief.game.turrest01.commands.PlaceTowerCommand;
+import be.lefief.game.turrest01.commands.ResourceEventCommand;
 import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
 import be.lefief.game.turrest01.commands.SendCreepCommand;
 import be.lefief.game.turrest01.commands.TowerPlacedCommand;
+import be.lefief.game.turrest01.resource.ResourceEventType;
 import be.lefief.game.turrest01.creep.CreepType;
 import be.lefief.game.turrest01.resource.PlayerResources;
 import be.lefief.game.turrest01.resource.TurrestCost;
@@ -141,6 +143,14 @@ public class Turrest01GameHandler {
                 resources.getGold()
         ));
 
+        // Send resource event animation for building cost
+        clientSession.sendCommand(new ResourceEventCommand(
+                ResourceEventType.BUILD_BUILDING,
+                buildingDef.getCost(),
+                x + 0.5, y + 0.5,  // Center of tile
+                player.getPlayerNumber()
+        ));
+
         // Broadcast building change to all players
         turrestGame.broadcastToAllPlayers(new BuildingChangedResponse(
                 x, y, buildingDef.getId(), player.getPlayerNumber()
@@ -246,6 +256,14 @@ public class Turrest01GameHandler {
                 resources.getGold()
         ));
 
+        // Send resource event animation for tower cost
+        clientSession.sendCommand(new ResourceEventCommand(
+                ResourceEventType.BUILD_TOWER,
+                towerDef.getCost(),
+                x + 0.5, y + 0.5,  // Center of tile
+                player.getPlayerNumber()
+        ));
+
         // Broadcast tower placement to all players
         turrestGame.broadcastToAllPlayers(new TowerPlacedCommand(tower, turrestGame.getTickRateMs()));
     }
@@ -311,6 +329,15 @@ public class Turrest01GameHandler {
 
         // Send resource update to the sending player
         turrestGame.sendResourceUpdateToPlayer(player.getPlayerNumber());
+
+        // Send resource event animation for send cost
+        // Position at screen center (frontend will handle positioning for SEND_CREEP events)
+        clientSession.sendCommand(new ResourceEventCommand(
+                ResourceEventType.SEND_CREEP,
+                sendCost,
+                -1, -1,  // Special coordinates: frontend will use screen center
+                player.getPlayerNumber()
+        ));
 
         // Spawn creep for all other players
         turrestGame.getCreepManager().spawnSentCreep(creepType, player.getPlayerNumber(), turrestGame);
