@@ -67,7 +67,9 @@ export class LobbyService {
           id: p.id,
           name: p.name,
           colorIndex: p.colorIndex,
-          ready: p.ready
+          ready: p.ready,
+          isBot: p.isBot || false,
+          botDifficulty: p.botDifficulty || null
         }));
         this.lobbyPlayers.set(players);
 
@@ -153,5 +155,14 @@ export class LobbyService {
 
   renameLobby(name: string): void {
     this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'RENAME', { name });
+  }
+
+  addBot(difficulty: string = 'EASY'): void {
+    console.log('LobbyService.addBot() called with difficulty:', difficulty);
+    this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'ADD_BOT', { difficulty });
+  }
+
+  removeBot(botId: string): void {
+    this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'REMOVE_BOT', { botId });
   }
 }

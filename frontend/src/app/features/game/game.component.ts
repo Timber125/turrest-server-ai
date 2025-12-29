@@ -696,6 +696,13 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     this.subscriptions.push(damageSub);
 
+    // Listen for HP updates (reconnection sync)
+    const hpUpdateSub = this.socketService.onCommand('GAME', 'PLAYER_HP_UPDATE')
+      .subscribe(cmd => {
+        this.ngZone.run(() => this.handlePlayerHpUpdate(cmd.data));
+      });
+    this.subscriptions.push(hpUpdateSub);
+
     // Listen for game over - run in NgZone to trigger change detection
     const gameOverSub = this.socketService.onCommand('GAME', 'GAME_OVER')
       .subscribe(cmd => {
@@ -1316,6 +1323,16 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  private handlePlayerHpUpdate(data: Record<string, any>): void {
+    const playerNumber = data['playerNumber'] as number;
+    const hitpoints = data['hitpoints'] as number;
+
+    if (playerNumber === this.myPlayerNumber) {
+      this.myHitpoints = hitpoints;
+      console.log(`HP synced: ${hitpoints}`);
+    }
+  }
+
   private handleGameOver(data: Record<string, any>): void {
     const playerNumber = data['playerNumber'] as number;
     const isWinner = data['isWinner'] as boolean;
@@ -1490,8 +1507,8 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       // Convert tile coordinates to screen coordinates
       const startX = (attack.towerX + 0.5) * this.tileSize - this.cameraX;
       const startY = (attack.towerY + 0.5) * this.tileSize - this.cameraY;
-      const endX = attack.targetX * this.tileSize - this.cameraX;
-      const endY = attack.targetY * this.tileSize - this.cameraY;
+      const endX = (attack.targetX + 0.5) * this.tileSize - this.cameraX;
+      const endY = (attack.targetY + 0.5) * this.tileSize - this.cameraY;
 
       // Interpolate bullet position
       const bulletX = startX + (endX - startX) * attack.progress;

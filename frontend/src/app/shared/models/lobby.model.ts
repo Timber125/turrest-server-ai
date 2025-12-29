@@ -3,6 +3,8 @@ export interface LobbyPlayer {
   name: string;
   colorIndex: number;
   ready: boolean;
+  isBot?: boolean;
+  botDifficulty?: string | null;
 }
 
 export interface Lobby {

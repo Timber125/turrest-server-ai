@@ -57,9 +57,14 @@ const COLOR_NAMES: string[] = [
             <div class="players-card">
               <h2>Players</h2>
               @for (player of lobbyService.players(); track player.id) {
-                <div class="player-row">
+                <div class="player-row" [class.bot-player]="player.isBot">
                   <div class="player-color" [style.background-color]="getPlayerColor(player.colorIndex)"></div>
-                  <span class="player-name">{{ player.name }}</span>
+                  <span class="player-name">
+                    {{ player.name }}
+                    @if (player.isBot) {
+                      <span class="bot-badge">BOT</span>
+                    }
+                  </span>
                   @if (player.id === myId()) {
                     <div class="color-picker" [class.disabled]="player.ready">
                       <button
@@ -94,6 +99,10 @@ const COLOR_NAMES: string[] = [
                         Not Ready
                       }
                     </button>
+                  } @else if (player.isBot && isHost()) {
+                    <span class="color-name">{{ getColorName(player.colorIndex) }}</span>
+                    <span class="ready-badge">Ready</span>
+                    <button class="btn-remove-bot" (click)="removeBot(player.id)" title="Remove Bot">✕</button>
                   } @else {
                     <span class="color-name">{{ getColorName(player.colorIndex) }}</span>
                     @if (player.ready) {
@@ -102,6 +111,13 @@ const COLOR_NAMES: string[] = [
                       <span class="not-ready-badge">Not Ready</span>
                     }
                   }
+                </div>
+              }
+              @if (isHost() && canAddBot()) {
+                <div class="add-bot-section">
+                  <button class="btn-add-bot" (click)="addBot()">
+                    <span class="bot-icon">🤖</span> Add Bot
+                  </button>
                 </div>
               }
             </div>
@@ -484,6 +500,68 @@ const COLOR_NAMES: string[] = [
     .chat-sidebar {
       width: 300px;
     }
+
+    .bot-player {
+      background: linear-gradient(90deg, #1a1a2e 0%, #2a2a4e 100%);
+      border-left: 3px solid #9c27b0;
+    }
+
+    .bot-badge {
+      background: #9c27b0;
+      color: #fff;
+      font-size: 0.65rem;
+      padding: 0.15rem 0.4rem;
+      border-radius: 4px;
+      margin-left: 0.5rem;
+      font-weight: bold;
+    }
+
+    .btn-remove-bot {
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 4px;
+      background: #c62828;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 0.5rem;
+    }
+
+    .btn-remove-bot:hover {
+      background: #b71c1c;
+    }
+
+    .add-bot-section {
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px dashed #444;
+    }
+
+    .btn-add-bot {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: #7b1fa2;
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+
+    .btn-add-bot:hover {
+      background: #9c27b0;
+    }
+
+    .bot-icon {
+      font-size: 1.1rem;
+    }
   `]
 })
 export class LobbyRoomComponent implements OnInit {
@@ -600,5 +678,20 @@ export class LobbyRoomComponent implements OnInit {
   cancelEditName(): void {
     this.isEditingName.set(false);
     this.editingName.set('');
+  }
+
+  canAddBot(): boolean {
+    const lobby = this.lobbyService.activeLobby();
+    const players = this.lobbyService.players();
+    return lobby !== null && players.length < lobby.size;
+  }
+
+  addBot(): void {
+    console.log('addBot() clicked - calling lobbyService.addBot("EASY")');
+    this.lobbyService.addBot('EASY');
+  }
+
+  removeBot(botId: string): void {
+    this.lobbyService.removeBot(botId);
   }
 }
