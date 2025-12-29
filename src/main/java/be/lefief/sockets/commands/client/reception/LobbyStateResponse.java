@@ -22,6 +22,7 @@ public class LobbyStateResponse extends ServerToClientCommand {
         Map<String, Object> data = new HashMap<>();
         data.put("lobbyId", lobby.getLobbyID().toString());
         data.put("hostId", lobby.getHost().toString());
+        data.put("name", lobby.getName());
         data.put("game", lobby.getGame());
         data.put("size", lobby.getSize());
         data.put("hidden", lobby.isHidden());

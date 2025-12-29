@@ -10,6 +10,7 @@ import be.lefief.sockets.commands.client.emission.ChangeColorCommand;
 import be.lefief.sockets.commands.client.emission.CreateLobbyCommand;
 import be.lefief.sockets.commands.client.emission.JoinLobbyCommand;
 import be.lefief.sockets.commands.client.emission.RefreshLobbiesCommand;
+import be.lefief.sockets.commands.client.emission.RenameLobbyCommand;
 import be.lefief.sockets.commands.client.emission.StartLobbyGameCommand;
 import be.lefief.sockets.commands.client.emission.ToggleReadyCommand;
 import be.lefief.sockets.commands.client.reception.ConnectedToLobbyResponse;
@@ -129,6 +130,30 @@ public class LobbyHandler {
         boolean success = lobby.togglePlayerReady(socketCommand.getUserId());
         if (!success) {
             clientSession.sendCommand(new ErrorMessageResponse("Could not toggle ready state"));
+            return;
+        }
+
+        // Broadcast updated lobby state to all players
+        lobbyService.emitLobbyCommand(lobby.getLobbyID(), new LobbyStateResponse(lobby));
+    }
+
+    public void handleRenameLobby(SecuredClientToServerCommand<RenameLobbyCommand> socketCommand,
+            ClientSession clientSession) {
+        Lobby lobby = lobbyService.findLobbyByPlayer(socketCommand.getUserId());
+        if (lobby == null) {
+            clientSession.sendCommand(new ErrorMessageResponse("You are not in a lobby"));
+            return;
+        }
+
+        String newName = socketCommand.getCommand().getNewName();
+        if (newName == null || newName.trim().isEmpty()) {
+            clientSession.sendCommand(new ErrorMessageResponse("Lobby name cannot be empty"));
+            return;
+        }
+
+        boolean success = lobby.setName(newName, socketCommand.getUserId());
+        if (!success) {
+            clientSession.sendCommand(new ErrorMessageResponse("Only the host can rename the lobby"));
             return;
         }
 

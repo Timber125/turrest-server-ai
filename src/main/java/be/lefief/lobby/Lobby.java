@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 public class Lobby {
 
     private static final int SERVERSIDE_MAX_PLAYERS = 8;
+    private static final int MAX_NAME_LENGTH = 50;
 
     private boolean open;
     private final List<LobbyPlayer> players;
@@ -14,8 +15,13 @@ public class Lobby {
     private final String game;
     private boolean started;
     private final UUID hostId;
+    private String name;
 
     public Lobby(UUID host, String hostName, int maxPlayers, boolean hidden, String game) {
+        this(host, hostName, maxPlayers, hidden, game, null);
+    }
+
+    public Lobby(UUID host, String hostName, int maxPlayers, boolean hidden, String game, String name) {
         players = new ArrayList<>();
         this.maxplayers = maxPlayers;
         this.game = game;
@@ -24,6 +30,40 @@ public class Lobby {
         // Host gets color 0
         players.add(new LobbyPlayer(host, hostName, 0));
         open = maxPlayers > 1;
+        // Set default name if not provided
+        if (name == null || name.trim().isEmpty()) {
+            this.name = hostName + "'s lobby";
+        } else {
+            this.name = truncateName(name);
+        }
+    }
+
+    private String truncateName(String name) {
+        if (name.length() > MAX_NAME_LENGTH) {
+            return name.substring(0, MAX_NAME_LENGTH);
+        }
+        return name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public boolean setName(String newName, UUID requesterId) {
+        // Only host can rename
+        if (!requesterId.equals(hostId)) {
+            return false;
+        }
+        // Cannot rename after game started
+        if (started) {
+            return false;
+        }
+        // Name cannot be empty
+        if (newName == null || newName.trim().isEmpty()) {
+            return false;
+        }
+        this.name = truncateName(newName.trim());
+        return true;
     }
 
     public boolean isOpen() {

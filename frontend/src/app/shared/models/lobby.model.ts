@@ -7,6 +7,7 @@ export interface LobbyPlayer {
 
 export interface Lobby {
   id: string;
+  name?: string;
   size: number;
   hidden: boolean;
   password?: string;
@@ -21,6 +22,11 @@ export interface CreateLobbyRequest {
   hidden: boolean;
   password: string;
   game: string;
+  name?: string;
+}
+
+export interface RenameLobbyRequest {
+  name: string;
 }
 
 export interface JoinLobbyRequest {

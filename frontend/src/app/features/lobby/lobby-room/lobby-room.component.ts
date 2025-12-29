@@ -1,4 +1,4 @@
-import { Component, OnInit, effect, computed, HostListener } from '@angular/core';
+import { Component, OnInit, effect, computed, HostListener, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -20,7 +20,25 @@ const COLOR_NAMES: string[] = [
     <div class="room-container">
       <header class="room-header">
         <button class="btn-back" (click)="leaveLobby()">← Back to Lobbies</button>
-        <h1>{{ lobbyService.activeLobby()?.game || 'Lobby' }}</h1>
+        <div class="lobby-title">
+          @if (isEditingName()) {
+            <input
+              type="text"
+              class="lobby-name-input"
+              [value]="editingName()"
+              (input)="onNameInput($event)"
+              (keyup.enter)="saveLobbyName()"
+              (keyup.escape)="cancelEditName()"
+              #nameInput>
+            <button class="btn-icon btn-save" (click)="saveLobbyName()">✓</button>
+            <button class="btn-icon btn-cancel" (click)="cancelEditName()">✕</button>
+          } @else {
+            <h1>{{ lobbyService.activeLobby()?.name || lobbyService.activeLobby()?.game || 'Lobby' }}</h1>
+            @if (isHost()) {
+              <button class="btn-icon btn-edit" (click)="startEditName()">✎</button>
+            }
+          }
+        </div>
         <div class="user-info">
           <span>{{ authService.user()?.username }}</span>
         </div>
@@ -137,6 +155,62 @@ const COLOR_NAMES: string[] = [
     .room-header h1 {
       color: #00d9ff;
       margin: 0;
+    }
+
+    .lobby-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .lobby-name-input {
+      font-size: 1.5rem;
+      padding: 0.25rem 0.5rem;
+      background: #1a1a2e;
+      border: 1px solid #00d9ff;
+      border-radius: 4px;
+      color: #00d9ff;
+      font-weight: bold;
+      outline: none;
+    }
+
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-edit {
+      background: transparent;
+      color: #aaa;
+    }
+
+    .btn-edit:hover {
+      color: #00d9ff;
+    }
+
+    .btn-save {
+      background: #4caf50;
+      color: #fff;
+    }
+
+    .btn-save:hover {
+      background: #45a049;
+    }
+
+    .btn-cancel {
+      background: #666;
+      color: #fff;
+    }
+
+    .btn-cancel:hover {
+      background: #555;
     }
 
     .btn-back {
@@ -415,6 +489,8 @@ const COLOR_NAMES: string[] = [
 export class LobbyRoomComponent implements OnInit {
   myId = computed(() => this.authService.user()?.id);
   colorDropdownOpen = false;
+  isEditingName = signal(false);
+  editingName = signal('');
 
   constructor(
     public lobbyService: LobbyService,
@@ -504,5 +580,29 @@ export class LobbyRoomComponent implements OnInit {
   leaveLobby(): void {
     this.lobbyService.leaveLobby();
     this.router.navigate(['/lobby']);
+  }
+
+  startEditName(): void {
+    const currentName = this.lobbyService.activeLobby()?.name || '';
+    this.editingName.set(currentName);
+    this.isEditingName.set(true);
+  }
+
+  onNameInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.editingName.set(input.value);
+  }
+
+  saveLobbyName(): void {
+    const newName = this.editingName().trim();
+    if (newName) {
+      this.lobbyService.renameLobby(newName);
+    }
+    this.isEditingName.set(false);
+  }
+
+  cancelEditName(): void {
+    this.isEditingName.set(false);
+    this.editingName.set('');
   }
 }

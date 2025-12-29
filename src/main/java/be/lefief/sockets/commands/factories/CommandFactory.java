@@ -35,6 +35,7 @@ public class CommandFactory {
                 put(HIDDEN(i), lobby_i.isHidden());
                 put(PASSWORD(i), null);
                 put(GAME(i), lobby_i.getGame());
+                put(NAME(i), lobby_i.getName());
             }
         }});
     }

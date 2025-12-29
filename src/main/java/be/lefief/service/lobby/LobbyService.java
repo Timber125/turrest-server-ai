@@ -42,7 +42,7 @@ public class LobbyService implements SocketConnectionAcceptor {
         UUID hostID = command.getUserId();
         String hostName = command.getUserName();
         Lobby proposedLobby = new Lobby(hostID, hostName, command.getCommand().getSize(), command.getCommand().isHidden(),
-                command.getCommand().getGame());
+                command.getCommand().getGame(), command.getCommand().getName());
         // Remove host from other lobbies
         lobbyHosts.values().forEach(lobby -> lobby.removeClient(hostID));
         lobbyHosts.put(hostID, proposedLobby);

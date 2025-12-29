@@ -76,6 +76,7 @@ export class LobbyService {
         if (currentLobby) {
           this.currentLobby.set({
             ...currentLobby,
+            name: cmd.data['name'],
             hostId: cmd.data['hostId'],
             players: players,
             allReady: cmd.data['allReady']
@@ -91,6 +92,7 @@ export class LobbyService {
     for (let i = 0; i < count; i++) {
       lobbies.push({
         id: data[`lobby_id${i}`],
+        name: data[`name${i}`],
         size: data[`size${i}`],
         hidden: data[`hidden${i}`],
         password: data[`password${i}`],
@@ -110,7 +112,8 @@ export class LobbyService {
       size: request.size,
       hidden: request.hidden,
       password: request.password,
-      game: request.game
+      game: request.game,
+      name: request.name
     });
   }
 
@@ -142,5 +145,9 @@ export class LobbyService {
 
   toggleReady(): void {
     this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'TOGGLE_READY', {});
+  }
+
+  renameLobby(name: string): void {
+    this.socketService.sendCommand(ClientSocketSubject.LOBBY, 'RENAME', { name });
   }
 }

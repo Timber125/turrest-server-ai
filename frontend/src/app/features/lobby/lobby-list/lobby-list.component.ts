@@ -36,6 +36,7 @@ import { ChatComponent } from '../../../shared/components/chat/chat.component';
                 @for (lobby of lobbyService.lobbiesList(); track lobby.id) {
                   <div class="lobby-card">
                     <div class="lobby-info">
+                      <span class="lobby-name">{{ lobby.name || 'Unnamed Lobby' }}</span>
                       <span class="lobby-game">{{ lobby.game }}</span>
                       <span class="lobby-size">{{ lobby.size }} players</span>
                       @if (lobby.hidden) {
@@ -59,6 +60,11 @@ import { ChatComponent } from '../../../shared/components/chat/chat.component';
         <div class="dialog-overlay" (click)="showCreateDialog.set(false)">
           <div class="dialog" (click)="$event.stopPropagation()">
             <h3>Create Lobby</h3>
+
+            <div class="form-group">
+              <label>Lobby Name (optional)</label>
+              <input type="text" [(ngModel)]="newLobby.name" [ngModelOptions]="{standalone: true}" placeholder="My Lobby">
+            </div>
 
             <div class="form-group">
               <label>Game Type</label>
@@ -207,9 +213,15 @@ import { ChatComponent } from '../../../shared/components/chat/chat.component';
       align-items: center;
     }
 
+    .lobby-name {
+      color: #fff;
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+
     .lobby-game {
       color: #00d9ff;
-      font-weight: bold;
+      font-size: 0.9rem;
     }
 
     .lobby-size {
@@ -315,6 +327,7 @@ export class LobbyListComponent implements OnInit, OnDestroy {
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
 
   newLobby = {
+    name: '',
     game: 'TURREST-mode1',
     size: 4,
     hidden: false,
@@ -364,7 +377,8 @@ export class LobbyListComponent implements OnInit, OnDestroy {
       size: Number(this.newLobby.size),
       hidden: this.newLobby.hidden,
       password: this.newLobby.password,
-      game: this.newLobby.game
+      game: this.newLobby.game,
+      name: this.newLobby.name || undefined
     });
     this.showCreateDialog.set(false);
     this.router.navigate(['/lobby/room']);

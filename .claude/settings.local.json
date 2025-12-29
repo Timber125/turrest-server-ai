@@ -40,7 +40,8 @@
       "Bash(findstr:*)",
       "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" spring-boot:run:*)",
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(JAVA_HOME=\"/c/Users/timil/.jdks/corretto-17.0.16\" \"/c/Program Files/ApacheSoftwareFoundation/apache-maven-3.9.1/bin/mvn\" test:*)"
     ]
   }
 }
