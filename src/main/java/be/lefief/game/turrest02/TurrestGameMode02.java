@@ -1,45 +1,36 @@
-package be.lefief.game.turrest01;
+package be.lefief.game.turrest02;
 
 import be.lefief.game.Game;
 import be.lefief.game.map.GameMap;
 import be.lefief.game.map.LevelLoader;
 import be.lefief.game.map.Tile;
-import be.lefief.game.turrest01.commands.FullMapResponse;
-import be.lefief.game.turrest01.commands.GameOverCommand;
-import be.lefief.game.turrest01.commands.PlayerScoreEntry;
-import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
-import be.lefief.game.turrest01.commands.ScoreboardCommand;
-import be.lefief.game.turrest01.commands.TileUpdateResponse;
-import be.lefief.game.turrest01.creep.CreepManager;
-import be.lefief.game.turrest01.event.TurrestEvent;
-import be.lefief.game.turrest01.map.RoadGenerator;
-import be.lefief.game.turrest01.stats.GameStats;
-import be.lefief.game.turrest01.tower.TowerManager;
-import be.lefief.game.turrest01.resource.PlayerResources;
-import be.lefief.game.turrest01.structure.Road;
-import be.lefief.game.turrest01.wave.Wave;
-import be.lefief.game.turrest01.wave.WaveLoader;
+import be.lefief.game.turrest02.commands.*;
+import be.lefief.game.turrest02.creep.CreepManager;
+import be.lefief.game.turrest02.event.TurrestEvent;
+import be.lefief.game.turrest02.map.RoadGenerator;
+import be.lefief.game.turrest02.resource.PlayerResources;
+import be.lefief.game.turrest02.stats.GameStats;
+import be.lefief.game.turrest02.structure.Road;
+import be.lefief.game.turrest02.tower.TowerManager;
+import be.lefief.game.turrest02.wave.Wave;
+import be.lefief.game.turrest02.wave.WaveLoader;
 import be.lefief.sockets.ClientSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.awt.Point;
+import java.awt.*;
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class TurrestGameMode01 extends Game<Turrest01Player> {
+public class TurrestGameMode02 extends Game<Turrest02Player> {
 
-    private static final Logger LOG = LoggerFactory.getLogger(TurrestGameMode01.class);
-    private static final String LEVEL_PATH = "levels/turrest01/0001.level";
+    private static final Logger LOG = LoggerFactory.getLogger(TurrestGameMode02.class);
+    private static final String LEVEL_PATH = "levels/turrest02/0001.level";
     private static final String LEVEL_NAME = "0001";
     private static final int TICK_RATE_MS = 200; // Game tick 5 times per second (5 Hz)
     private static final double TICK_DURATION_SEC = TICK_RATE_MS / 1000.0;
@@ -54,13 +45,13 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     private int tickCount = 0;
     private int resourceTickCounter = 0;
 
-    public TurrestGameMode01(List<ClientSession> players, UUID lobbyHostId, Map<UUID, Integer> playerColorMap) {
+    public TurrestGameMode02(List<ClientSession> players, UUID lobbyHostId, Map<UUID, Integer> playerColorMap) {
         super(players, lobbyHostId, playerColorMap);
     }
 
     @Override
-    protected Turrest01Player createPlayer(ClientSession session, int playerNumber, UUID gameId, int colorIndex) {
-        return new Turrest01Player(session, playerNumber, gameId, colorIndex);
+    protected Turrest02Player createPlayer(ClientSession session, int playerNumber, UUID gameId, int colorIndex) {
+        return new Turrest02Player(session, playerNumber, gameId, colorIndex);
     }
 
     @Override
@@ -111,7 +102,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     }
 
     @Override
-    protected void resyncPlayer(Turrest01Player player) {
+    protected void resyncPlayer(Turrest02Player player) {
         if (gameMap == null || player.getClientSession() == null)
             return;
         LOG.info("Resyncing player {}", player.getPlayerNumber());
@@ -139,16 +130,16 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         LOG.info("Sending initial map to all players");
 
         // First, send player info to each player so they know their number and color
-        for (Turrest01Player player : getPlayerByNumber().values()) {
+        for (Turrest02Player player : getPlayerByNumber().values()) {
             if (player.isConnected()) {
                 player.getClientSession().sendCommand(
-                        new be.lefief.game.turrest01.commands.PlayerInfoResponse(player.getPlayerNumber(), player.getColorIndex()));
+                        new PlayerInfoResponse(player.getPlayerNumber(), player.getColorIndex()));
             }
         }
 
         // Build playerNumber -> colorIndex mapping for contour rendering
         Map<Integer, Integer> playerColorMap = new HashMap<>();
-        for (Turrest01Player player : getPlayerByNumber().values()) {
+        for (Turrest02Player player : getPlayerByNumber().values()) {
             playerColorMap.put(player.getPlayerNumber(), player.getColorIndex());
         }
 
@@ -158,7 +149,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
                 gameMap.getWidth(), gameMap.getHeight());
 
         // Send initial resources to each player
-        for (Turrest01Player player : getPlayerByNumber().values()) {
+        for (Turrest02Player player : getPlayerByNumber().values()) {
             if (player.isConnected()) {
                 PlayerResources resources = player.getResources();
                 player.getClientSession().sendCommand(new ResourceUpdateResponse(
@@ -179,7 +170,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
      */
     public void broadcastScoreboard() {
         List<PlayerScoreEntry> entries = getPlayerByNumber().values().stream()
-                .sorted(Comparator.comparingInt(Turrest01Player::getScore).reversed())
+                .sorted(Comparator.comparingInt(Turrest02Player::getScore).reversed())
                 .map(p -> new PlayerScoreEntry(
                         p.getPlayerNumber(),
                         p.getColorIndex(),
@@ -222,7 +213,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
      * Sends a resource update to the player.
      */
     public void awardGoldToPlayer(int playerNumber, int gold) {
-        Turrest01Player player = getPlayerByNumber().get(playerNumber);
+        Turrest02Player player = getPlayerByNumber().get(playerNumber);
         if (player != null && player.isConnected() && player.isAlive()) {
             PlayerResources resources = player.getResources();
             resources.addGold(gold);
@@ -234,7 +225,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
      * Send resource update to a specific player.
      */
     public void sendResourceUpdateToPlayer(int playerNumber) {
-        Turrest01Player player = getPlayerByNumber().get(playerNumber);
+        Turrest02Player player = getPlayerByNumber().get(playerNumber);
         if (player != null && player.isConnected()) {
             PlayerResources resources = player.getResources();
             player.getClientSession().sendCommand(new ResourceUpdateResponse(
@@ -249,7 +240,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
      * Send a command to a specific player by player number.
      */
     public void sendToPlayer(int playerNumber, be.lefief.sockets.commands.ServerToClientCommand command) {
-        Turrest01Player player = getPlayerByNumber().get(playerNumber);
+        Turrest02Player player = getPlayerByNumber().get(playerNumber);
         if (player != null && player.isConnected()) {
             player.getClientSession().sendCommand(command);
         }
@@ -288,7 +279,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
             if (resourceTickCounter >= RESOURCE_UPDATE_INTERVAL) {
                 resourceTickCounter = 0;
 
-                for (Turrest01Player player : getPlayerByNumber().values()) {
+                for (Turrest02Player player : getPlayerByNumber().values()) {
                     if (player.isConnected() && player.isAlive()) {
                         PlayerResources resources = player.getResources();
                         resources.addProduction();
@@ -312,19 +303,19 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         }
     }
 
-    public void handlePlayerDeath(Turrest01Player player) {
+    public void handlePlayerDeath(Turrest02Player player) {
         LOG.info("Player {} has been eliminated!", player.getPlayerNumber());
         broadcastScoreboard();
         broadcastToAllPlayers(new GameOverCommand(player.getPlayerNumber(), false));
 
         // Check if game is over (only one player left)
         long alivePlayers = getPlayerByNumber().values().stream()
-                .filter(Turrest01Player::isAlive)
+                .filter(Turrest02Player::isAlive)
                 .count();
 
         if (alivePlayers <= 1) {
-            Turrest01Player winner = getPlayerByNumber().values().stream()
-                    .filter(Turrest01Player::isAlive)
+            Turrest02Player winner = getPlayerByNumber().values().stream()
+                    .filter(Turrest02Player::isAlive)
                     .findFirst()
                     .orElse(null);
 
@@ -338,10 +329,10 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     }
 
     @Override
-    public void handlePlayerDisconnect(java.util.UUID userId) {
+    public void handlePlayerDisconnect(UUID userId) {
         // Find the disconnecting player
-        Turrest01Player disconnectedPlayer = null;
-        for (Turrest01Player player : getPlayerByNumber().values()) {
+        Turrest02Player disconnectedPlayer = null;
+        for (Turrest02Player player : getPlayerByNumber().values()) {
             if (player.getClientSession() != null && userId.equals(player.getClientSession().getUserId())) {
                 disconnectedPlayer = player;
                 player.setConnected(false);
@@ -354,8 +345,8 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         // Check for winner by forfeit
         long connectedCount = getActiveConnectedPlayersCount();
         if (getPlayerByNumber().size() > 1 && connectedCount == 1) {
-            Turrest01Player winner = getPlayerByNumber().values().stream()
-                    .filter(Turrest01Player::isConnected)
+            Turrest02Player winner = getPlayerByNumber().values().stream()
+                    .filter(Turrest02Player::isConnected)
                     .findFirst()
                     .orElse(null);
 

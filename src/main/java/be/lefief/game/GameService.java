@@ -1,6 +1,7 @@
 package be.lefief.game;
 
 import be.lefief.game.turrest01.TurrestGameMode01;
+import be.lefief.game.turrest02.TurrestGameMode02;
 import be.lefief.service.lobby.LobbyService;
 import be.lefief.sockets.ClientSession;
 import org.slf4j.Logger;
@@ -33,6 +34,8 @@ public class GameService {
         Game<?> game;
         if ("TURREST-mode1".equals(gameType)) {
             game = new TurrestGameMode01(lobbyPlayers, lobbyHostId, playerColorMap);
+        } else if ("TURREST-mode2".equals(gameType)) {
+            game = new TurrestGameMode02(lobbyPlayers, lobbyHostId, playerColorMap);
         } else {
             LOG.warn("Unknown game type '{}', defaulting to TURREST-mode1", gameType);
             game = new TurrestGameMode01(lobbyPlayers, lobbyHostId, playerColorMap);

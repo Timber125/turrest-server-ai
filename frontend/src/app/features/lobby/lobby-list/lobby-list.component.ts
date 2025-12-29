@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -70,6 +70,7 @@ import { ChatComponent } from '../../../shared/components/chat/chat.component';
               <label>Game Type</label>
               <select [(ngModel)]="newLobby.game" [ngModelOptions]="{standalone: true}">
                 <option value="TURREST-mode1">TURREST Mode 1</option>
+                <option value="TURREST-mode2">TURREST Mode 2</option>
               </select>
             </div>
 
@@ -325,6 +326,7 @@ import { ChatComponent } from '../../../shared/components/chat/chat.component';
 export class LobbyListComponent implements OnInit, OnDestroy {
   showCreateDialog = signal(false);
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
+  private pendingJoin = signal(false);
 
   newLobby = {
     name: '',
@@ -339,16 +341,22 @@ export class LobbyListComponent implements OnInit, OnDestroy {
     public authService: AuthService,
     private socketService: SocketService,
     private router: Router
-  ) {}
+  ) {
+    // Navigate to lobby room when activeLobby is set (after server confirms join/create)
+    effect(() => {
+      const lobby = this.lobbyService.activeLobby();
+      if (lobby && this.pendingJoin()) {
+        this.pendingJoin.set(false);
+        this.router.navigate(['/lobby/room']);
+      }
+    });
+  }
 
   ngOnInit(): void {
     // Connect to socket if not connected
     if (this.socketService.state() !== 'connected') {
       this.socketService.connect();
     }
-
-    // Subscribe to lobby changes
-    this.lobbyService.activeLobby;
 
     // Refresh lobbies on init, then start auto-refresh interval
     setTimeout(() => {
@@ -373,6 +381,7 @@ export class LobbyListComponent implements OnInit, OnDestroy {
   }
 
   createLobby(): void {
+    this.pendingJoin.set(true);
     this.lobbyService.createLobby({
       size: Number(this.newLobby.size),
       hidden: this.newLobby.hidden,
@@ -381,12 +390,13 @@ export class LobbyListComponent implements OnInit, OnDestroy {
       name: this.newLobby.name || undefined
     });
     this.showCreateDialog.set(false);
-    this.router.navigate(['/lobby/room']);
+    // Navigation happens via effect when activeLobby is set
   }
 
   joinLobby(lobby: Lobby): void {
+    this.pendingJoin.set(true);
     this.lobbyService.joinLobby(lobby.id);
-    this.router.navigate(['/lobby/room']);
+    // Navigation happens via effect when activeLobby is set
   }
 
   logout(): void {

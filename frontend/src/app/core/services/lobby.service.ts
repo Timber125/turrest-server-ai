@@ -129,6 +129,10 @@ export class LobbyService {
   }
 
   leaveLobby(): void {
+    // Notify server that we're leaving the lobby
+    if (this.currentLobby()) {
+      this.socketService.sendCommand(ClientSocketSubject.LOBBY, SocketTopic.LEAVE, {});
+    }
     this.currentLobby.set(null);
     this.lobbyPlayers.set([]);
     this.inGame.set(false);

@@ -28,6 +28,7 @@ export enum SocketTopic {
   GET_ALL = 'GET_ALL',
   CREATE = 'CREATE',
   JOIN = 'JOIN',
+  LEAVE = 'LEAVE',
   START_GAME = 'START_GAME',
   LEAVE_GAME = 'LEAVE_GAME',
 

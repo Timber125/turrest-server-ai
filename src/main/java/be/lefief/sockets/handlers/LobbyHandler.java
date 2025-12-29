@@ -9,6 +9,7 @@ import be.lefief.sockets.SecuredClientToServerCommand;
 import be.lefief.sockets.commands.client.emission.ChangeColorCommand;
 import be.lefief.sockets.commands.client.emission.CreateLobbyCommand;
 import be.lefief.sockets.commands.client.emission.JoinLobbyCommand;
+import be.lefief.sockets.commands.client.emission.LeaveLobbyCommand;
 import be.lefief.sockets.commands.client.emission.RefreshLobbiesCommand;
 import be.lefief.sockets.commands.client.emission.RenameLobbyCommand;
 import be.lefief.sockets.commands.client.emission.StartLobbyGameCommand;
@@ -159,5 +160,28 @@ public class LobbyHandler {
 
         // Broadcast updated lobby state to all players
         lobbyService.emitLobbyCommand(lobby.getLobbyID(), new LobbyStateResponse(lobby));
+    }
+
+    public void handleLeaveLobby(SecuredClientToServerCommand<LeaveLobbyCommand> socketCommand,
+            ClientSession clientSession) {
+        Lobby lobby = lobbyService.findLobbyByPlayer(socketCommand.getUserId());
+        if (lobby == null) {
+            // Already not in a lobby, no action needed
+            return;
+        }
+
+        UUID lobbyId = lobby.getLobbyID();
+        boolean wasHost = lobby.getLobbyID().equals(socketCommand.getUserId());
+
+        // Remove the player from the lobby
+        lobby.removeClient(socketCommand.getUserId());
+
+        // If player was the host and lobby is now empty, remove the lobby
+        if (wasHost && lobby.getPlayerIds().isEmpty()) {
+            lobbyService.removeLobby(lobbyId);
+        } else if (!lobby.getPlayerIds().isEmpty()) {
+            // Broadcast updated lobby state to remaining players
+            lobbyService.emitLobbyCommand(lobbyId, new LobbyStateResponse(lobby));
+        }
     }
 }

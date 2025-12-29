@@ -507,14 +507,10 @@ export class LobbyRoomComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // If not in a lobby, redirect back (unless session was invalidated)
-    if (!this.lobbyService.activeLobby()) {
-      setTimeout(() => {
-        // Don't redirect if session was invalidated (logout in progress)
-        if (!this.authService.isSessionInvalidated() && !this.lobbyService.activeLobby()) {
-          this.router.navigate(['/lobby']);
-        }
-      }, 1000);
+    // If not in a lobby, redirect back immediately (unless session was invalidated)
+    // This handles direct navigation to /lobby/room without going through lobby-list
+    if (!this.lobbyService.activeLobby() && !this.authService.isSessionInvalidated()) {
+      this.router.navigate(['/lobby']);
     }
   }
 
