@@ -7,7 +7,7 @@ import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.util.CommandTopicHandler;
 import org.springframework.stereotype.Component;
 
-@Component
+@Component("turrest02SendCreepHandler")
 public class SendCreepHandler extends CommandTopicHandler<SendCreepCommand> {
 
     public SendCreepHandler() {

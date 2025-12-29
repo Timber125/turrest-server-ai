@@ -214,6 +214,10 @@ export class ActionPanelComponent {
 
   getTowerTooltip(tower: TowerDefinition): string {
     const terrainNames = tower.allowedTerrains.map(t => TerrainType[t]).join(', ');
-    return `${tower.name}\nDamage: ${tower.damage}, Range: ${tower.range} tiles\nCost: ${tower.cost.wood} Wood, ${tower.cost.stone} Stone, ${tower.cost.gold} Gold\nCan build on: ${terrainNames}`;
+    let tooltip = `${tower.name}\nDamage: ${tower.damage}, Range: ${tower.range} tiles, Fire rate: ${(1000/tower.cooldownMs).toFixed(1)}/s\nCost: ${tower.cost.wood} Wood, ${tower.cost.stone} Stone, ${tower.cost.gold} Gold`;
+    if (tower.description) {
+      tooltip += `\n${tower.description}`;
+    }
+    return tooltip;
   }
 }

@@ -11,8 +11,8 @@ public class GetStatsListener extends CommandHandler<GetStatsCommand> {
 
     private final Turrest01GameHandler gameHandler;
 
-    public GetStatsListener(Turrest01GameHandler gameHandler, GetStatsHandler getStatsHandler) {
-        super(getStatsHandler);
+    public GetStatsListener(Turrest01GameHandler gameHandler, GetStatsHandlerT01 getStatsHandlerT01) {
+        super(getStatsHandlerT01);
         this.gameHandler = gameHandler;
         openChannel();
     }

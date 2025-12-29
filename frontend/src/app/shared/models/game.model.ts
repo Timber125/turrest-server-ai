@@ -111,6 +111,10 @@ export interface TowerDefinition {
   range: number;
   cooldownMs: number;
   damage: number;
+  splashRadius?: number;
+  slowFactor?: number;
+  slowDurationMs?: number;
+  description?: string;
 }
 
 export const TOWER_DEFINITIONS: TowerDefinition[] = [
@@ -122,7 +126,55 @@ export const TOWER_DEFINITIONS: TowerDefinition[] = [
     allowedTerrains: [TerrainType.GRASS, TerrainType.DIRT],
     range: 3,
     cooldownMs: 1000,
-    damage: 10
+    damage: 30,
+    description: 'Balanced tower with decent range and damage'
+  },
+  {
+    id: 2,
+    name: 'Sniper Tower',
+    icon: '🎯',
+    cost: { wood: 60, stone: 150, gold: 200 },
+    allowedTerrains: [TerrainType.GRASS, TerrainType.DIRT],
+    range: 5,
+    cooldownMs: 3000,
+    damage: 80,
+    description: 'Long range, high damage, slow fire rate'
+  },
+  {
+    id: 3,
+    name: 'Splash Tower',
+    icon: '💥',
+    cost: { wood: 120, stone: 120, gold: 150 },
+    allowedTerrains: [TerrainType.GRASS, TerrainType.DIRT],
+    range: 2.5,
+    cooldownMs: 1500,
+    damage: 20,
+    splashRadius: 1.0,
+    description: 'Area damage - hits all creeps in splash radius'
+  },
+  {
+    id: 4,
+    name: 'Slow Tower',
+    icon: '❄️',
+    cost: { wood: 60, stone: 100, gold: 130 },
+    allowedTerrains: [TerrainType.GRASS, TerrainType.DIRT],
+    range: 2.5,
+    cooldownMs: 800,
+    damage: 15,
+    slowFactor: 0.5,
+    slowDurationMs: 2500,
+    description: 'Slows enemies by 50% for 2.5 seconds'
+  },
+  {
+    id: 5,
+    name: 'Rapid Tower',
+    icon: '⚡',
+    cost: { wood: 100, stone: 80, gold: 100 },
+    allowedTerrains: [TerrainType.GRASS, TerrainType.DIRT],
+    range: 2,
+    cooldownMs: 400,
+    damage: 12,
+    description: 'Very fast fire rate, low damage per shot'
   }
 ];
 
@@ -158,19 +210,66 @@ export interface CreepDefinition {
   name: string;
   icon: string;
   sendCost: { wood: number; stone: number; gold: number };
+  hitpoints: number;
+  speed: number;
+  description?: string;
+  spawnCount?: number;
 }
 
 export const CREEP_DEFINITIONS: CreepDefinition[] = [
   {
+    id: 'RUNNER',
+    name: 'Runner',
+    icon: '🏃',
+    sendCost: { wood: 0, stone: 0, gold: 5 },
+    hitpoints: 25,
+    speed: 20,
+    description: 'Very fast but fragile'
+  },
+  {
     id: 'GHOST',
     name: 'Ghost',
-    icon: '\uD83D\uDC7B',
-    sendCost: { wood: 0, stone: 0, gold: 10 }
+    icon: '👻',
+    sendCost: { wood: 0, stone: 0, gold: 10 },
+    hitpoints: 50,
+    speed: 30,
+    description: 'Balanced speed and health'
+  },
+  {
+    id: 'SWARM',
+    name: 'Swarm',
+    icon: '🐜',
+    sendCost: { wood: 0, stone: 0, gold: 8 },
+    hitpoints: 15,
+    speed: 25,
+    spawnCount: 5,
+    description: 'Spawns 5 weak creeps'
+  },
+  {
+    id: 'HEALER',
+    name: 'Healer',
+    icon: '💚',
+    sendCost: { wood: 0, stone: 0, gold: 25 },
+    hitpoints: 80,
+    speed: 30,
+    description: 'Heals nearby creeps'
   },
   {
     id: 'TROLL',
     name: 'Troll',
-    icon: '\uD83E\uDDCC',
-    sendCost: { wood: 0, stone: 0, gold: 30 }
+    icon: '🧌',
+    sendCost: { wood: 0, stone: 0, gold: 30 },
+    hitpoints: 250,
+    speed: 25,
+    description: 'Tough and resilient'
+  },
+  {
+    id: 'TANK',
+    name: 'Tank',
+    icon: '🛡️',
+    sendCost: { wood: 0, stone: 0, gold: 60 },
+    hitpoints: 500,
+    speed: 40,
+    description: 'Massive HP, very slow'
   }
 ];

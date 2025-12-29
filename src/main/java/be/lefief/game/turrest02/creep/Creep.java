@@ -19,6 +19,10 @@ public class Creep {
     private int hitpoints;
     private boolean reachedCastle;
 
+    // Slow effect tracking
+    private double slowFactor = 0.0;  // 0.0 = no slow, 0.5 = 50% slow
+    private long slowExpiresAt = 0;   // System time when slow expires
+
     public Creep(CreepType type, int ownerPlayerNumber, Integer spawnedByPlayer, List<Point> path, Point spawnerPosition) {
         this.id = UUID.randomUUID();
         this.type = type;
@@ -42,7 +46,13 @@ public class Creep {
             return;
         }
 
-        double moveDistance = type.getTilesPerSecond() * deltaTime * 2.0; // Speed multiplier
+        // Calculate effective speed with slow effect
+        double effectiveSpeed = type.getTilesPerSecond();
+        if (isSlowed()) {
+            effectiveSpeed *= (1.0 - slowFactor);
+        }
+
+        double moveDistance = effectiveSpeed * deltaTime * 2.0; // Speed multiplier
 
         while (moveDistance > 0 && currentPathIndex < path.size()) {
             Point target = path.get(currentPathIndex);
@@ -84,5 +94,32 @@ public class Creep {
 
     public boolean isDead() {
         return hitpoints <= 0;
+    }
+
+    /**
+     * Apply slow effect to this creep.
+     * @param factor Slow factor (0.5 = 50% speed reduction)
+     * @param durationMs Duration in milliseconds
+     */
+    public void applySlow(double factor, int durationMs) {
+        // Only apply if stronger than current slow or current slow expired
+        if (factor > this.slowFactor || !isSlowed()) {
+            this.slowFactor = factor;
+            this.slowExpiresAt = System.currentTimeMillis() + durationMs;
+        }
+    }
+
+    /**
+     * Check if creep is currently slowed.
+     */
+    public boolean isSlowed() {
+        return slowFactor > 0 && System.currentTimeMillis() < slowExpiresAt;
+    }
+
+    /**
+     * Heal this creep (for healer creep ability).
+     */
+    public void heal(int amount) {
+        this.hitpoints = Math.min(type.getHitpoints(), hitpoints + amount);
     }
 }

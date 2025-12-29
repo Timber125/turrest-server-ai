@@ -90,7 +90,29 @@ public class TowerManager {
                 if (target != null) {
                     // Fire!
                     tower.fire(tickRateMs);
-                    target.takeDamage(tower.getBulletDamage());
+
+                    TowerDefinition def = tower.getDefinition();
+
+                    // Handle splash damage
+                    if (def.hasSplash()) {
+                        List<Creep> splashTargets = findCreepsInRadius(tower, target, def.getSplashRadius());
+                        for (Creep splashTarget : splashTargets) {
+                            splashTarget.takeDamage(tower.getBulletDamage());
+                        }
+                        LOG.trace("Tower {} splash hit {} creeps for {} damage",
+                                tower.getId(), splashTargets.size(), tower.getBulletDamage());
+                    } else {
+                        target.takeDamage(tower.getBulletDamage());
+                    }
+
+                    // Handle slow effect
+                    if (def.hasSlow()) {
+                        target.applySlow(def.getSlowFactor(), def.getSlowDurationMs());
+                        LOG.trace("Tower {} slowed creep {} by {}% for {}ms",
+                                tower.getId(), target.getId(),
+                                (int)(def.getSlowFactor() * 100), def.getSlowDurationMs());
+                    }
+
                     attacks.add(new TowerAttack(tower, target));
 
                     LOG.trace("Tower {} fired at creep {}, dealt {} damage (HP: {})",
@@ -103,6 +125,26 @@ public class TowerManager {
         if (!attacks.isEmpty()) {
             game.broadcastToAllPlayers(new BatchedTowerAttackCommand(attacks));
         }
+    }
+
+    /**
+     * Find all creeps within a radius of the target creep (for splash damage).
+     */
+    private List<Creep> findCreepsInRadius(Tower tower, Creep center, double radius) {
+        List<Creep> targets = new ArrayList<>();
+        for (Creep creep : creepManager.getActiveCreeps()) {
+            if (creep.isDead()) continue;
+            if (creep.getOwnerPlayerNumber() != tower.getOwnerPlayerNumber()) continue;
+
+            double dx = center.getX() - creep.getX();
+            double dy = center.getY() - creep.getY();
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= radius) {
+                targets.add(creep);
+            }
+        }
+        return targets;
     }
 
     /**

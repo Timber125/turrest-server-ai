@@ -132,6 +132,13 @@ export class SendCreepsPanelComponent {
   }
 
   getTooltip(creep: CreepDefinition): string {
-    return `Send ${creep.name}\nCost: ${creep.sendCost.gold} Gold\nSends this creep to all opponents`;
+    let tooltip = `${creep.name}\nHP: ${creep.hitpoints}, Speed: ${creep.speed}\nCost: ${creep.sendCost.gold} Gold`;
+    if (creep.spawnCount && creep.spawnCount > 1) {
+      tooltip += `\nSpawns ${creep.spawnCount} creeps`;
+    }
+    if (creep.description) {
+      tooltip += `\n${creep.description}`;
+    }
+    return tooltip;
   }
 }

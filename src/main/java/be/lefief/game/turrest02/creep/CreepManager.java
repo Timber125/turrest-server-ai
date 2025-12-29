@@ -101,12 +101,41 @@ public class CreepManager {
             if (!creep.hasReachedCastle() && !creep.isDead()) {
                 creep.move(deltaTime);
                 movedCreeps.add(creep);
+
+                // Handle healer ability - heal nearby creeps
+                if (creep.getType().canHeal()) {
+                    healNearbyCreeps(creep, deltaTime);
+                }
             }
         }
 
         // Send all updates in a single batched command
         if (!movedCreeps.isEmpty()) {
             game.broadcastToAllPlayers(new BatchedCreepUpdateCommand(movedCreeps));
+        }
+    }
+
+    /**
+     * Heal creeps near a healer creep.
+     * Heals based on distance traveled (every N tiles).
+     */
+    private void healNearbyCreeps(Creep healer, double deltaTime) {
+        double healRadius = 1.5;  // Heal creeps within 1.5 tiles
+        int healAmount = healer.getType().getHealAmount();
+
+        for (Creep target : activeCreeps.values()) {
+            if (target == healer || target.isDead() || target.hasReachedCastle()) continue;
+            if (target.getOwnerPlayerNumber() != healer.getOwnerPlayerNumber()) continue;
+
+            double dx = healer.getX() - target.getX();
+            double dy = healer.getY() - target.getY();
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= healRadius) {
+                // Heal proportionally to deltaTime (simulates continuous healing)
+                int healThisTick = (int) Math.ceil(healAmount * deltaTime);
+                target.heal(healThisTick);
+            }
         }
     }
 
@@ -205,6 +234,7 @@ public class CreepManager {
     /**
      * Spawn a creep sent by a player to all OTHER players.
      * The creep will have a colored contour indicating who sent it.
+     * Handles spawn count for swarm-type creeps.
      *
      * @param type              The type of creep to spawn
      * @param senderPlayerNumber The player who sent the creep
@@ -212,6 +242,7 @@ public class CreepManager {
      */
     public void spawnSentCreep(CreepType type, int senderPlayerNumber, TurrestGameMode02 game) {
         List<Creep> spawnedCreeps = new ArrayList<>();
+        int spawnCount = type.getSpawnCount();
 
         // Spawn creep for all players EXCEPT the sender
         for (int playerNum = 0; playerNum < playerCount; playerNum++) {
@@ -227,17 +258,21 @@ public class CreepManager {
                 continue;
             }
 
-            // spawnedByPlayer = sender's number (for colored contour)
-            Creep creep = new Creep(type, playerNum, senderPlayerNumber, path, spawner);
-            activeCreeps.put(creep.getId(), creep);
-            spawnedCreeps.add(creep);
+            // Spawn multiple creeps for swarm types
+            for (int i = 0; i < spawnCount; i++) {
+                // spawnedByPlayer = sender's number (for colored contour)
+                Creep creep = new Creep(type, playerNum, senderPlayerNumber, path, spawner);
+                activeCreeps.put(creep.getId(), creep);
+                spawnedCreeps.add(creep);
+            }
         }
 
         // Broadcast spawns
         if (!spawnedCreeps.isEmpty()) {
             game.broadcastToAllPlayers(new BatchedSpawnCreepCommand(spawnedCreeps));
-            LOG.info("Player {} sent {} to {} opponents",
-                    senderPlayerNumber, type.getId(), spawnedCreeps.size());
+            LOG.info("Player {} sent {}x{} to {} opponents (total: {} creeps)",
+                    senderPlayerNumber, spawnCount, type.getId(),
+                    playerCount - 1, spawnedCreeps.size());
         }
     }
 

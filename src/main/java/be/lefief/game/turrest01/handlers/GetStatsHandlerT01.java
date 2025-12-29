@@ -8,9 +8,9 @@ import be.lefief.util.CommandTopicHandler;
 import org.springframework.stereotype.Component;
 
 @Component
-public class GetStatsHandler extends CommandTopicHandler<GetStatsCommand> {
+public class GetStatsHandlerT01 extends CommandTopicHandler<GetStatsCommand> {
 
-    public GetStatsHandler() {
+    public GetStatsHandlerT01() {
         super(GetStatsCommand.SUBJECT.name(), GetStatsCommand.TOPIC);
     }
 

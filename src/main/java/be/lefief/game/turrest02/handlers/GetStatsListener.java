@@ -6,7 +6,7 @@ import be.lefief.sockets.SecuredClientToServerCommand;
 import be.lefief.sockets.handlers.CommandHandler;
 import org.springframework.stereotype.Component;
 
-@Component
+@Component("turrest02GetStatsListener")
 public class GetStatsListener extends CommandHandler<GetStatsCommand> {
 
     private final Turrest02GameHandler gameHandler;

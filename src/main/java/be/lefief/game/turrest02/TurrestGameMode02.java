@@ -14,6 +14,7 @@ import be.lefief.game.turrest02.structure.Road;
 import be.lefief.game.turrest02.tower.TowerManager;
 import be.lefief.game.turrest02.wave.Wave;
 import be.lefief.game.turrest02.wave.WaveLoader;
+import be.lefief.service.turrest02.PersistentStatsService;
 import be.lefief.sockets.ClientSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +45,13 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
     private boolean running;
     private int tickCount = 0;
     private int resourceTickCounter = 0;
+    private final PersistentStatsService persistentStatsService;
+    private UUID winnerId = null;  // Track winner for stats
 
-    public TurrestGameMode02(List<ClientSession> players, UUID lobbyHostId, Map<UUID, Integer> playerColorMap) {
+    public TurrestGameMode02(List<ClientSession> players, UUID lobbyHostId, Map<UUID, Integer> playerColorMap,
+                             PersistentStatsService persistentStatsService) {
         super(players, lobbyHostId, playerColorMap);
+        this.persistentStatsService = persistentStatsService;
     }
 
     @Override
@@ -322,6 +327,11 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
             if (winner != null) {
                 LOG.info("Game over! Player {} wins!", winner.getPlayerNumber());
                 broadcastToAllPlayers(new GameOverCommand(winner.getPlayerNumber(), true));
+
+                // Save winner ID for persistent stats
+                if (winner.getClientSession() != null) {
+                    winnerId = winner.getClientSession().getUserId();
+                }
             }
 
             stop();
@@ -361,6 +371,11 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
                 // Send winner announcement
                 broadcastToAllPlayers(new GameOverCommand(winner.getPlayerNumber(), true));
 
+                // Save winner ID for persistent stats
+                if (winner.getClientSession() != null) {
+                    winnerId = winner.getClientSession().getUserId();
+                }
+
                 stop();
                 if (getOnGameEnd() != null) {
                     getOnGameEnd().run();
@@ -389,6 +404,17 @@ public class TurrestGameMode02 extends Game<Turrest02Player> {
                 gameLoop.shutdownNow();
             }
         }
+
+        // Record persistent stats for all players
+        if (persistentStatsService != null) {
+            try {
+                persistentStatsService.recordGameEnd(this, winnerId);
+                LOG.info("Persistent stats recorded for game, winner: {}", winnerId);
+            } catch (Exception e) {
+                LOG.error("Failed to record persistent stats", e);
+            }
+        }
+
         shutdownCommunicationPool();
         LOG.info("Game loop stopped after {} ticks", tickCount);
     }

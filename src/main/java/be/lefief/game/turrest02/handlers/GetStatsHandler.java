@@ -7,7 +7,7 @@ import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.util.CommandTopicHandler;
 import org.springframework.stereotype.Component;
 
-@Component
+@Component("turrest02GetStatsHandler")
 public class GetStatsHandler extends CommandTopicHandler<GetStatsCommand> {
 
     public GetStatsHandler() {

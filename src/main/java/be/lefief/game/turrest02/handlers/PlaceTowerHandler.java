@@ -7,7 +7,7 @@ import be.lefief.sockets.commands.ClientToServerCommand;
 import be.lefief.util.CommandTopicHandler;
 import org.springframework.stereotype.Component;
 
-@Component
+@Component("turrest02PlaceTowerHandler")
 public class PlaceTowerHandler extends CommandTopicHandler<PlaceTowerCommand> {
 
     public PlaceTowerHandler() {

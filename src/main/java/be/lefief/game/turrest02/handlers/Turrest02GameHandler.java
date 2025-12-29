@@ -15,7 +15,7 @@ import be.lefief.game.turrest02.resource.PlayerResources;
 import be.lefief.game.turrest02.resource.ResourceEventType;
 import be.lefief.game.turrest02.resource.TurrestCost;
 import be.lefief.game.turrest02.structure.TurrestBuilding;
-import be.lefief.game.turrest02.tower.BasicTower;
+import be.lefief.game.turrest02.tower.GenericTower;
 import be.lefief.game.turrest02.tower.Tower;
 import be.lefief.game.turrest02.tower.TowerDefinition;
 import be.lefief.sockets.ClientSession;
@@ -280,9 +280,7 @@ public class Turrest02GameHandler {
     }
 
     private Tower createTower(TowerDefinition def, int playerNumber, int x, int y) {
-        return switch (def) {
-            case BASIC_TOWER -> new BasicTower(playerNumber, x, y);
-        };
+        return new GenericTower(def, playerNumber, x, y);
     }
 
     public void handleSendCreep(SecuredClientToServerCommand<SendCreepCommand> command, ClientSession clientSession) {

@@ -3,6 +3,7 @@ package be.lefief.game;
 import be.lefief.game.turrest01.TurrestGameMode01;
 import be.lefief.game.turrest02.TurrestGameMode02;
 import be.lefief.service.lobby.LobbyService;
+import be.lefief.service.turrest02.PersistentStatsService;
 import be.lefief.sockets.ClientSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,9 +22,11 @@ public class GameService {
     // Simplified: userId -> gameId (one session per user)
     private final Map<UUID, UUID> playerActiveGame;
     private final LobbyService lobbyService;
+    private final PersistentStatsService persistentStatsService;
 
-    public GameService(LobbyService lobbyService) {
+    public GameService(LobbyService lobbyService, PersistentStatsService persistentStatsService) {
         this.lobbyService = lobbyService;
+        this.persistentStatsService = persistentStatsService;
         games = new ConcurrentHashMap<>();
         playerActiveGame = new ConcurrentHashMap<>();
     }
@@ -35,7 +38,7 @@ public class GameService {
         if ("TURREST-mode1".equals(gameType)) {
             game = new TurrestGameMode01(lobbyPlayers, lobbyHostId, playerColorMap);
         } else if ("TURREST-mode2".equals(gameType)) {
-            game = new TurrestGameMode02(lobbyPlayers, lobbyHostId, playerColorMap);
+            game = new TurrestGameMode02(lobbyPlayers, lobbyHostId, playerColorMap, persistentStatsService);
         } else {
             LOG.warn("Unknown game type '{}', defaulting to TURREST-mode1", gameType);
             game = new TurrestGameMode01(lobbyPlayers, lobbyHostId, playerColorMap);
