@@ -25,6 +25,10 @@ public class Turrest01Player extends Player {
         hitpoints = Math.max(0, hitpoints - damage);
     }
 
+    public void heal(int amount) {
+        hitpoints = Math.min(STARTING_HITPOINTS, hitpoints + amount);
+    }
+
     public boolean isAlive() {
         return hitpoints > 0;
     }

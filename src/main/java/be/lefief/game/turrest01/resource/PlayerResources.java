@@ -37,6 +37,10 @@ public class PlayerResources {
         return getAmount(ResourceType.GOLD);
     }
 
+    public void addGold(int amount) {
+        resources.put(ResourceType.GOLD, resources.get(ResourceType.GOLD) + amount);
+    }
+
     public int getProductionRate(ResourceType type) {
         return productionRates.getOrDefault(type, 0);
     }
@@ -57,6 +61,20 @@ public class PlayerResources {
         resources.put(ResourceType.WOOD, resources.get(ResourceType.WOOD) - cost.getWood());
         resources.put(ResourceType.STONE, resources.get(ResourceType.STONE) - cost.getStone());
         resources.put(ResourceType.GOLD, resources.get(ResourceType.GOLD) - cost.getGold());
+    }
+
+    public void subtract(TurrestCost cost) {
+        resources.put(ResourceType.WOOD, resources.get(ResourceType.WOOD) - cost.getWood());
+        resources.put(ResourceType.STONE, resources.get(ResourceType.STONE) - cost.getStone());
+        resources.put(ResourceType.GOLD, resources.get(ResourceType.GOLD) - cost.getGold());
+        // Note: hitpoints are handled separately by TurrestCost.apply()
+    }
+
+    public void add(TurrestReward reward) {
+        resources.put(ResourceType.WOOD, resources.get(ResourceType.WOOD) + reward.getWood());
+        resources.put(ResourceType.STONE, resources.get(ResourceType.STONE) + reward.getStone());
+        resources.put(ResourceType.GOLD, resources.get(ResourceType.GOLD) + reward.getGold());
+        // Note: hitpoints are handled separately by TurrestReward.apply()
     }
 
     public void addProductionBonus(ResourceType type, int bonus) {

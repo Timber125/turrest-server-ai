@@ -10,8 +10,11 @@ import be.lefief.game.turrest01.commands.BuildingChangedResponse;
 import be.lefief.game.turrest01.commands.PlaceBuildingCommand;
 import be.lefief.game.turrest01.commands.PlaceTowerCommand;
 import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
+import be.lefief.game.turrest01.commands.SendCreepCommand;
 import be.lefief.game.turrest01.commands.TowerPlacedCommand;
+import be.lefief.game.turrest01.creep.CreepType;
 import be.lefief.game.turrest01.resource.PlayerResources;
+import be.lefief.game.turrest01.resource.TurrestCost;
 import be.lefief.game.turrest01.structure.TurrestBuilding;
 import be.lefief.game.turrest01.tower.BasicTower;
 import be.lefief.game.turrest01.tower.Tower;
@@ -251,6 +254,66 @@ public class Turrest01GameHandler {
         return switch (def) {
             case BASIC_TOWER -> new BasicTower(playerNumber, x, y);
         };
+    }
+
+    public void handleSendCreep(SecuredClientToServerCommand<SendCreepCommand> command, ClientSession clientSession) {
+        SendCreepCommand sendCommand = command.getCommand();
+        String creepTypeId = sendCommand.getCreepTypeId();
+
+        UUID userId = clientSession.getUserId();
+        LOG.info("[SEND CREEP] Player '{}' (userId={}) attempting to send creep type '{}'",
+                command.getUserName(), userId, creepTypeId);
+
+        // Get the game for this player
+        Game<?> game = gameService.getGameByUserId(userId);
+
+        if (game == null) {
+            LOG.warn("No game found for user {}", userId);
+            clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
+            return;
+        }
+
+        if (!(game instanceof TurrestGameMode01 turrestGame)) {
+            LOG.warn("Game is not TurrestGameMode01");
+            clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
+            return;
+        }
+
+        // Find the player
+        Turrest01Player player = findPlayerBySession(turrestGame, clientSession);
+        if (player == null) {
+            LOG.warn("[SEND CREEP] Could not find player for session userId={}", userId);
+            clientSession.sendCommand(new ErrorMessageResponse("Player not found"));
+            return;
+        }
+
+        // Get creep type
+        CreepType creepType = CreepType.fromId(creepTypeId);
+        if (creepType == null) {
+            LOG.warn("Unknown creep type: {}", creepTypeId);
+            clientSession.sendCommand(new ErrorMessageResponse("Unknown creep type"));
+            return;
+        }
+
+        // Check if player can afford
+        TurrestCost sendCost = creepType.getSendCost();
+        if (!sendCost.canAfford(player)) {
+            LOG.info("Player {} cannot afford to send {}", player.getPlayerNumber(), creepType.getId());
+            clientSession.sendCommand(new ErrorMessageResponse("Not enough resources"));
+            return;
+        }
+
+        // Subtract cost
+        sendCost.apply(player);
+
+        LOG.info("Player {} sent {} to opponents",
+                player.getPlayerNumber(), creepType.getId());
+
+        // Send resource update to the sending player
+        turrestGame.sendResourceUpdateToPlayer(player.getPlayerNumber());
+
+        // Spawn creep for all other players
+        turrestGame.getCreepManager().spawnSentCreep(creepType, player.getPlayerNumber(), turrestGame);
     }
 
     private Turrest01Player findPlayerBySession(TurrestGameMode01 game, ClientSession session) {

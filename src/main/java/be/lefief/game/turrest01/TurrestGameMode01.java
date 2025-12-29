@@ -198,6 +198,38 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
         return TICK_RATE_MS;
     }
 
+    /**
+     * Award gold to a player (e.g., for killing creeps).
+     * Sends a resource update to the player.
+     */
+    public void awardGoldToPlayer(int playerNumber, int gold) {
+        Turrest01Player player = getPlayerByNumber().get(playerNumber);
+        if (player != null && player.isConnected() && player.isAlive()) {
+            PlayerResources resources = player.getResources();
+            resources.addGold(gold);
+            sendResourceUpdateToPlayer(playerNumber);
+        }
+    }
+
+    /**
+     * Send resource update to a specific player.
+     */
+    public void sendResourceUpdateToPlayer(int playerNumber) {
+        Turrest01Player player = getPlayerByNumber().get(playerNumber);
+        if (player != null && player.isConnected()) {
+            PlayerResources resources = player.getResources();
+            player.getClientSession().sendCommand(new ResourceUpdateResponse(
+                    resources.getWood(),
+                    resources.getStone(),
+                    resources.getGold()
+            ));
+        }
+    }
+
+    public CreepManager getCreepManager() {
+        return creepManager;
+    }
+
     private void startGameLoop() {
         running = true;
         gameLoop = Executors.newSingleThreadScheduledExecutor();

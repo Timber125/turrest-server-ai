@@ -151,3 +151,26 @@ export interface TowerAttack {
   bulletType: string;
   progress: number; // 0-1 for animation interpolation
 }
+
+// Creep definitions for sending creeps to opponents
+export interface CreepDefinition {
+  id: string;
+  name: string;
+  icon: string;
+  sendCost: { wood: number; stone: number; gold: number };
+}
+
+export const CREEP_DEFINITIONS: CreepDefinition[] = [
+  {
+    id: 'GHOST',
+    name: 'Ghost',
+    icon: '\uD83D\uDC7B',
+    sendCost: { wood: 0, stone: 0, gold: 10 }
+  },
+  {
+    id: 'TROLL',
+    name: 'Troll',
+    icon: '\uD83E\uDDCC',
+    sendCost: { wood: 0, stone: 0, gold: 30 }
+  }
+];

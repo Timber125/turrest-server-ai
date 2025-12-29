@@ -2,11 +2,12 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, Hos
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { LobbyService, SocketService, AuthService } from '../../core/services';
-import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry, Tower, TowerAttack, TowerDefinition, TOWER_DEFINITIONS } from '../../shared/models';
+import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry, Tower, TowerAttack, TowerDefinition, TOWER_DEFINITIONS, CreepDefinition } from '../../shared/models';
 import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
 import { TileInfoComponent } from './components/tile-info/tile-info.component';
 import { ActionPanelComponent } from './components/action-panel/action-panel.component';
+import { SendCreepsPanelComponent } from './components/send-creeps-panel/send-creeps-panel.component';
 import { MinimapComponent } from './components/minimap/minimap.component';
 import { ResourceBarComponent } from './components/resource-bar/resource-bar.component';
 import { RanklistComponent } from './components/ranklist/ranklist.component';
@@ -20,6 +21,7 @@ import { Subscription } from 'rxjs';
     ChatComponent,
     TileInfoComponent,
     ActionPanelComponent,
+    SendCreepsPanelComponent,
     MinimapComponent,
     ResourceBarComponent,
     RanklistComponent
@@ -92,7 +94,8 @@ import { Subscription } from 'rxjs';
             <!-- Left: Selected Tile Info -->
             <app-tile-info
                class="pane-section-wrapper tile-info"
-               [selectedTile]="selectedTile">
+               [selectedTile]="selectedTile"
+               [tower]="getSelectedTower()">
             </app-tile-info>
 
             <!-- Center: Actions -->
@@ -106,6 +109,13 @@ import { Subscription } from 'rxjs';
                (towerSelected)="onTowerSelected($event)"
                (placementCancelled)="cancelPlacementMode()">
             </app-action-panel>
+
+            <!-- Send Creeps -->
+            <app-send-creeps-panel
+               class="pane-section-wrapper send-creeps-pane"
+               [resources]="resources"
+               (creepSent)="onCreepSent($event)">
+            </app-send-creeps-panel>
 
             <!-- Right: Minimap -->
             <app-minimap
@@ -378,9 +388,15 @@ import { Subscription } from 'rxjs';
       min-width: 150px;
     }
 
-    /* Actions (center 60%) */
+    /* Actions (center 50%) */
     .actions-pane {
       flex: 1;
+    }
+
+    /* Send Creeps (10%) */
+    .send-creeps-pane {
+      width: 10%;
+      min-width: 80px;
     }
 
     /* Minimap (right 20%) */
@@ -437,6 +453,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   // Towers
   towers: Map<string, Tower> = new Map();
   activeAttacks: TowerAttack[] = [];
+
+  // Floating text (gold rewards, etc.)
+  floatingTexts: { x: number; y: number; text: string; color: string; age: number }[] = [];
 
   // Scoreboard
   scoreboard: PlayerScoreEntry[] = [];
@@ -687,6 +706,7 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
       this.updateCreepPositions(deltaTime);
       this.updateBulletPositions(deltaTime);
+      this.updateFloatingTexts(deltaTime);
       this.render();
 
       this.animationFrameId = requestAnimationFrame(animate);
@@ -724,6 +744,18 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.activeAttacks = this.activeAttacks.filter(attack => {
       attack.progress += deltaTime * bulletSpeed;
       return attack.progress < 1;
+    });
+  }
+
+  private updateFloatingTexts(deltaTime: number): void {
+    if (deltaTime <= 0) return;
+
+    // Age floating texts and remove old ones (lifetime = 1.5 seconds)
+    const maxAge = 1.5;
+    this.floatingTexts = this.floatingTexts.filter(ft => {
+      ft.age += deltaTime;
+      ft.y -= deltaTime * 0.5; // Float upward (0.5 tiles per second)
+      return ft.age < maxAge;
     });
   }
 
@@ -1003,9 +1035,23 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private handleDespawnCreep(data: Record<string, any>): void {
     const creepId = data['creepId'] as string;
+    const goldAwarded = data['goldAwarded'] as number || 0;
+    const awardedToPlayer = data['awardedToPlayer'] as number ?? -1;
+    const x = data['x'] as number;
+    const y = data['y'] as number;
+
+    // Show floating gold text if gold was awarded to current player
+    if (goldAwarded > 0 && awardedToPlayer === this.myPlayerNumber) {
+      this.floatingTexts.push({
+        x: x,
+        y: y,
+        text: `+${goldAwarded}`,
+        color: '#FFD700',
+        age: 0
+      });
+    }
+
     this.creeps.delete(creepId);
-    console.log('Despawned creep:', creepId);
-    this.render();
   }
 
   private handleTowerPlaced(data: Record<string, any>): void {
@@ -1121,6 +1167,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Draw bullets (on top of everything)
     this.drawBullets();
+
+    // Draw floating text (gold rewards, etc.)
+    this.drawFloatingTexts();
 
     if (this.selectedTile) {
       this.drawSelection();
@@ -1246,6 +1295,29 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       this.ctx.strokeStyle = 'rgba(255, 204, 0, 0.3)';
       this.ctx.lineWidth = 2;
       this.ctx.stroke();
+    }
+  }
+
+  private drawFloatingTexts(): void {
+    const maxAge = 1.5;
+    for (const ft of this.floatingTexts) {
+      const screenX = ft.x * this.tileSize - this.cameraX;
+      const screenY = ft.y * this.tileSize - this.cameraY;
+
+      // Fade out as age increases
+      const alpha = 1 - (ft.age / maxAge);
+
+      this.ctx.font = `bold ${this.tileSize * 0.5}px Arial`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+
+      // Draw shadow
+      this.ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.7})`;
+      this.ctx.fillText(ft.text, screenX + 1, screenY + 1);
+
+      // Draw text
+      this.ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+      this.ctx.fillText(ft.text, screenX, screenY);
     }
   }
 
@@ -1690,6 +1762,16 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedTileY = -1;
   }
 
+  getSelectedTower(): Tower | null {
+    if (!this.selectedTile) return null;
+    for (const tower of this.towers.values()) {
+      if (tower.x === this.selectedTile.x && tower.y === this.selectedTile.y) {
+        return tower;
+      }
+    }
+    return null;
+  }
+
   cancelPlacementMode(): void {
     this.placementMode = null;
     this.placementType = null;
@@ -1706,6 +1788,14 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
         console.log('Creating turret at', this.selectedTile.x, this.selectedTile.y);
       }
     }
+  }
+
+  // Send Creep Handler
+  onCreepSent(creep: CreepDefinition): void {
+    console.log('Sending creep:', creep.id);
+    this.socketService.sendCommand('GAME', 'SEND_CREEP', {
+      creepTypeId: creep.id
+    });
   }
 
   // Minimap Navigation Handler

@@ -145,10 +145,60 @@ public class CreepManager {
 
                 it.remove();
             } else if (creep.isDead()) {
-                // Creep was killed by turrets (future feature)
-                game.broadcastToAllPlayers(new DespawnCreepCommand(creep));
+                // Creep was killed by towers - award kill reward to the player who owns this section
+                int playerNum = creep.getOwnerPlayerNumber();
+                Turrest01Player player = game.getPlayerByNumber().get(playerNum);
+                if (player != null) {
+                    creep.getType().getKillReward().apply(player);
+                }
+
+                int goldReward = creep.getType().getGoldReward();
+                LOG.debug("Creep {} killed, awarding {} gold to player {}",
+                        creep.getId(), goldReward, playerNum);
+
+                game.broadcastToAllPlayers(new DespawnCreepCommand(creep, goldReward, playerNum));
+                game.sendResourceUpdateToPlayer(playerNum);
                 it.remove();
             }
+        }
+    }
+
+    /**
+     * Spawn a creep sent by a player to all OTHER players.
+     * The creep will have a colored contour indicating who sent it.
+     *
+     * @param type              The type of creep to spawn
+     * @param senderPlayerNumber The player who sent the creep
+     * @param game              Game instance for broadcasting
+     */
+    public void spawnSentCreep(CreepType type, int senderPlayerNumber, TurrestGameMode01 game) {
+        List<Creep> spawnedCreeps = new ArrayList<>();
+
+        // Spawn creep for all players EXCEPT the sender
+        for (int playerNum = 0; playerNum < playerCount; playerNum++) {
+            if (playerNum == senderPlayerNumber) {
+                continue; // Don't spawn on sender's own section
+            }
+
+            List<Point> path = playerPaths.get(playerNum);
+            Point spawner = playerSpawners.get(playerNum);
+
+            if (path == null || path.isEmpty() || spawner == null) {
+                LOG.warn("Player {} has no valid path, skipping sent creep spawn", playerNum);
+                continue;
+            }
+
+            // spawnedByPlayer = sender's number (for colored contour)
+            Creep creep = new Creep(type, playerNum, senderPlayerNumber, path, spawner);
+            activeCreeps.put(creep.getId(), creep);
+            spawnedCreeps.add(creep);
+        }
+
+        // Broadcast spawns
+        if (!spawnedCreeps.isEmpty()) {
+            game.broadcastToAllPlayers(new BatchedSpawnCreepCommand(spawnedCreeps));
+            LOG.info("Player {} sent {} to {} opponents",
+                    senderPlayerNumber, type.getId(), spawnedCreeps.size());
         }
     }
 

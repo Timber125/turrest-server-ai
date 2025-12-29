@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Tile, TerrainType, StructureType, BUILDING_DEFINITIONS } from '../../../../shared/models';
+import { Tile, TerrainType, StructureType, BUILDING_DEFINITIONS, Tower } from '../../../../shared/models';
 
 @Component({
     selector: 'app-tile-info',
@@ -13,11 +13,17 @@ import { Tile, TerrainType, StructureType, BUILDING_DEFINITIONS } from '../../..
         <div class="tile-details">
           <p><span class="label">Position:</span> ({{ selectedTile.x }}, {{ selectedTile.y }})</p>
           <p><span class="label">Terrain:</span> {{ getTerrainName(selectedTile.terrainType) }}</p>
-          @if (selectedTile.structureType !== undefined) {
-            <p><span class="label">{{ getStructureLabel(selectedTile) }}</span></p>
-          }
-          @if (selectedTile.ownerPlayerNumber !== undefined) {
-            <p><span class="label">Owner:</span> Player {{ selectedTile.ownerPlayerNumber + 1 }}</p>
+          @if (tower) {
+            <p><span class="label">Structure:</span> 🗼 {{ tower.towerName }}</p>
+            <p><span class="label">Damage:</span> {{ tower.damage }}</p>
+            <p><span class="label">Range:</span> {{ tower.range }} tiles</p>
+            <p><span class="label">Fire Rate:</span> {{ tower.practicalFireRate.toFixed(1) }}/s</p>
+            <p><span class="label">Owner:</span> Player {{ tower.playerNumber + 1 }}</p>
+          } @else if (selectedTile.structureType !== undefined) {
+            <p><span class="label">Structure:</span> {{ getStructureLabel(selectedTile) }}</p>
+            @if (selectedTile.ownerPlayerNumber !== undefined) {
+              <p><span class="label">Owner:</span> Player {{ selectedTile.ownerPlayerNumber + 1 }}</p>
+            }
           }
           <div class="terrain-preview" [style.background-color]="getTerrainColor(selectedTile.terrainType)"></div>
         </div>
@@ -72,6 +78,7 @@ import { Tile, TerrainType, StructureType, BUILDING_DEFINITIONS } from '../../..
 })
 export class TileInfoComponent {
     @Input() selectedTile: Tile | null = null;
+    @Input() tower: Tower | null = null;
 
     terrainTypes = [
         { type: TerrainType.GRASS, name: 'Grass', color: '#4CAF50' },
