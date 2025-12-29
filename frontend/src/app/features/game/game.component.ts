@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, AfterViewInit, HostListener, NgZone, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import { LobbyService, SocketService, AuthService, AudioService } from '../../core/services';
-import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry, Tower, TowerAttack, TowerDefinition, TOWER_DEFINITIONS, CreepDefinition } from '../../shared/models';
+import { LobbyService, SocketService, AuthService, AudioService, InputService } from '../../core/services';
+import { TerrainType, Tile, StructureType, PlayerResources, BuildingDefinition, BUILDING_DEFINITIONS, Creep, PlayerScoreEntry, Tower, TowerAttack, TowerDefinition, TOWER_DEFINITIONS, CreepDefinition, InputAction, InputContext } from '../../shared/models';
 import { getPlayerColor } from '../../shared/constants/player-colors';
 import { ChatComponent } from '../../shared/components/chat/chat.component';
 import { TileInfoComponent } from './components/tile-info/tile-info.component';
@@ -11,6 +11,7 @@ import { SendCreepsPanelComponent } from './components/send-creeps-panel/send-cr
 import { MinimapComponent } from './components/minimap/minimap.component';
 import { ResourceBarComponent } from './components/resource-bar/resource-bar.component';
 import { RanklistComponent } from './components/ranklist/ranklist.component';
+import { GameMenuComponent } from './components/game-menu/game-menu.component';
 import { Subscription } from 'rxjs';
 
 // Enhanced floating text interface for multi-resource animations
@@ -39,7 +40,8 @@ interface FloatingText {
     SendCreepsPanelComponent,
     MinimapComponent,
     ResourceBarComponent,
-    RanklistComponent
+    RanklistComponent,
+    GameMenuComponent
   ],
   template: `
     <div class="game-container">
@@ -153,6 +155,13 @@ interface FloatingText {
           <app-chat></app-chat>
         </div>
       </div>
+
+      @if (menuOpen()) {
+        <app-game-menu
+          (continue)="closeMenu()"
+          (quit)="leaveGame()">
+        </app-game-menu>
+      }
     </div>
   `,
   styles: [`
@@ -449,7 +458,11 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private ctx!: CanvasRenderingContext2D;
   private subscriptions: Subscription[] = [];
+  private inputService!: InputService;
   tiles: Map<string, Tile> = new Map();
+
+  // Menu state
+  menuOpen = signal(false);
 
   // Resources
   resources: PlayerResources = { wood: 100, stone: 100, gold: 100 };
@@ -566,10 +579,19 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     private socketService: SocketService,
     private router: Router,
     private ngZone: NgZone,
-    private audioService: AudioService
-  ) { }
+    private audioService: AudioService,
+    inputService: InputService
+  ) {
+    this.inputService = inputService;
+  }
 
   ngOnInit(): void {
+    // Subscribe to input actions
+    const inputSub = this.inputService.action$.subscribe(action => {
+      this.ngZone.run(() => this.handleInputAction(action));
+    });
+    this.subscriptions.push(inputSub);
+
     // Listen for tile updates (new format with structure data)
     const tileUpdateSub = this.socketService.onCommand('GAME', 'TILE_UPDATE')
       .subscribe(cmd => {
@@ -769,7 +791,12 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
       const dy = creep.targetY - creep.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance > 0.01) {
+      // If too far behind (>1.5 tiles), snap to prevent diagonal shortcuts through grass
+      // This can happen when client interpolation is slower than server updates
+      if (distance > 1.5) {
+        creep.x = creep.targetX;
+        creep.y = creep.targetY;
+      } else if (distance > 0.01) {
         const moveDistance = creep.speed * deltaTime;
         const ratio = Math.min(moveDistance / distance, 1);
         creep.x += dx * ratio;
@@ -861,10 +888,97 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
     this.render();
   }
 
-  @HostListener('window:keydown', ['$event'])
-  onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.placementMode) {
-      this.cancelPlacementMode();
+  /**
+   * Handle input actions from InputService.
+   */
+  private handleInputAction(action: InputAction): void {
+    switch (action) {
+      case InputAction.MENU_TOGGLE:
+        if (this.menuOpen()) {
+          this.closeMenu();
+        } else {
+          this.openMenu();
+        }
+        break;
+
+      case InputAction.SELECTION_CANCEL:
+        if (this.placementMode) {
+          this.cancelPlacementMode();
+        }
+        break;
+
+      case InputAction.CAMERA_RESET:
+        this.resetView();
+        break;
+
+      case InputAction.ZOOM_IN:
+        this.zoomIn();
+        break;
+
+      case InputAction.ZOOM_OUT:
+        this.zoomOut();
+        break;
+
+      case InputAction.BUILD_LUMBERCAMP:
+        this.selectBuildingById(1);
+        break;
+
+      case InputAction.BUILD_STONE_QUARRY:
+        this.selectBuildingById(2);
+        break;
+
+      case InputAction.BUILD_GOLD_MINE:
+        this.selectBuildingById(3);
+        break;
+
+      case InputAction.TOWER_BASIC:
+        this.selectTowerById(1);
+        break;
+
+      case InputAction.SEND_CREEP_1:
+        this.sendCreepBySlot(0);
+        break;
+
+      case InputAction.SEND_CREEP_2:
+        this.sendCreepBySlot(1);
+        break;
+
+      case InputAction.SEND_CREEP_3:
+        this.sendCreepBySlot(2);
+        break;
+    }
+  }
+
+  openMenu(): void {
+    this.menuOpen.set(true);
+  }
+
+  closeMenu(): void {
+    this.menuOpen.set(false);
+  }
+
+  private selectBuildingById(id: number): void {
+    const building = BUILDING_DEFINITIONS.find(b => b.id === id);
+    if (building) {
+      this.onBuildingSelected(building);
+    }
+  }
+
+  private selectTowerById(id: number): void {
+    const tower = TOWER_DEFINITIONS.find(t => t.id === id);
+    if (tower) {
+      this.onTowerSelected(tower);
+    }
+  }
+
+  private sendCreepBySlot(slot: number): void {
+    // Get creep definitions - would need to import CREEP_DEFINITIONS
+    // For now, send a placeholder creepTypeId based on slot
+    const creepIds = ['GHOST', 'TROLL']; // Match the available creeps
+    if (slot < creepIds.length) {
+      this.socketService.sendCommand('GAME', 'SEND_CREEP', {
+        creepTypeId: creepIds[slot]
+      });
     }
   }
 
@@ -1892,20 +2006,32 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Building placement
   onBuildingSelected(building: BuildingDefinition): void {
+    // Exit previous placement mode if any
+    if (this.placementMode) {
+      this.inputService.popContext(InputContext.PLACEMENT);
+    }
     this.placementMode = building;
     this.placementType = 'building';
     this.selectedTile = null;
     this.selectedTileX = -1;
     this.selectedTileY = -1;
+    // Enter placement context so Escape cancels placement
+    this.inputService.pushContext(InputContext.PLACEMENT);
   }
 
   // Tower placement
   onTowerSelected(tower: TowerDefinition): void {
+    // Exit previous placement mode if any
+    if (this.placementMode) {
+      this.inputService.popContext(InputContext.PLACEMENT);
+    }
     this.placementMode = tower;
     this.placementType = 'tower';
     this.selectedTile = null;
     this.selectedTileX = -1;
     this.selectedTileY = -1;
+    // Enter placement context so Escape cancels placement
+    this.inputService.pushContext(InputContext.PLACEMENT);
   }
 
   getSelectedTower(): Tower | null {
@@ -1919,6 +2045,9 @@ export class GameComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   cancelPlacementMode(): void {
+    if (this.placementMode) {
+      this.inputService.popContext(InputContext.PLACEMENT);
+    }
     this.placementMode = null;
     this.placementType = null;
     this.hoverTileX = -1;

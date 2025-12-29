@@ -11,7 +11,9 @@ import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
 import be.lefief.game.turrest01.commands.ScoreboardCommand;
 import be.lefief.game.turrest01.commands.TileUpdateResponse;
 import be.lefief.game.turrest01.creep.CreepManager;
+import be.lefief.game.turrest01.event.TurrestEvent;
 import be.lefief.game.turrest01.map.RoadGenerator;
+import be.lefief.game.turrest01.stats.GameStats;
 import be.lefief.game.turrest01.tower.TowerManager;
 import be.lefief.game.turrest01.resource.PlayerResources;
 import be.lefief.game.turrest01.structure.Road;
@@ -46,6 +48,7 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     private GameMap gameMap;
     private CreepManager creepManager;
     private TowerManager towerManager;
+    private GameStats gameStats;
     private ScheduledExecutorService gameLoop;
     private boolean running;
     private int tickCount = 0;
@@ -63,6 +66,9 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
     @Override
     public void start() {
         LOG.info("Starting TurrestGameMode01 for {} players with 5s countdown", getPlayerByNumber().size());
+
+        // Initialize game stats
+        gameStats = new GameStats();
 
         try {
             // 1. Send countdown to players
@@ -196,6 +202,19 @@ public class TurrestGameMode01 extends Game<Turrest01Player> {
 
     public int getTickRateMs() {
         return TICK_RATE_MS;
+    }
+
+    public GameStats getGameStats() {
+        return gameStats;
+    }
+
+    /**
+     * Record a game event for statistics tracking.
+     */
+    public void recordEvent(TurrestEvent event) {
+        if (gameStats != null) {
+            gameStats.recordEvent(event);
+        }
     }
 
     /**

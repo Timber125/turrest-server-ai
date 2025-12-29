@@ -9,10 +9,15 @@ import be.lefief.game.turrest01.building.BuildingDefinition;
 import be.lefief.game.turrest01.commands.BuildingChangedResponse;
 import be.lefief.game.turrest01.commands.PlaceBuildingCommand;
 import be.lefief.game.turrest01.commands.PlaceTowerCommand;
+import be.lefief.game.turrest01.commands.GetStatsCommand;
 import be.lefief.game.turrest01.commands.ResourceEventCommand;
 import be.lefief.game.turrest01.commands.ResourceUpdateResponse;
 import be.lefief.game.turrest01.commands.SendCreepCommand;
+import be.lefief.game.turrest01.commands.StatsResponseCommand;
 import be.lefief.game.turrest01.commands.TowerPlacedCommand;
+import be.lefief.game.turrest01.event.BuildingBuiltEvent;
+import be.lefief.game.turrest01.event.CreepSentEvent;
+import be.lefief.game.turrest01.event.TowerBuiltEvent;
 import be.lefief.game.turrest01.resource.ResourceEventType;
 import be.lefief.game.turrest01.creep.CreepType;
 import be.lefief.game.turrest01.resource.PlayerResources;
@@ -133,6 +138,13 @@ public class Turrest01GameHandler {
         resources.addProductionBonuses(buildingDef.getProductionBonus());
         tile.setStructure(new TurrestBuilding(buildingDef, player.getPlayerNumber()));
 
+        // Record building event for stats
+        turrestGame.recordEvent(new BuildingBuiltEvent(
+                player.getPlayerNumber(),
+                buildingDef.getId(),
+                x, y
+        ));
+
         LOG.info("Player {} built {} at ({}, {})",
                 player.getPlayerNumber(), buildingDef.getName(), x, y);
 
@@ -244,6 +256,13 @@ public class Turrest01GameHandler {
         Tower tower = createTower(towerDef, player.getPlayerNumber(), x, y);
         turrestGame.getTowerManager().addTower(tower);
 
+        // Record tower event for stats
+        turrestGame.recordEvent(new TowerBuiltEvent(
+                player.getPlayerNumber(),
+                towerDef.getId(),
+                x, y
+        ));
+
         LOG.info("Player {} built {} at ({}, {}) - theoretical rate: {}/s, practical rate: {}/s",
                 player.getPlayerNumber(), towerDef.getName(), x, y,
                 towerDef.getTheoreticalFireRate(),
@@ -324,6 +343,13 @@ public class Turrest01GameHandler {
         // Subtract cost
         sendCost.apply(player);
 
+        // Record creep sent event for stats
+        turrestGame.recordEvent(new CreepSentEvent(
+                player.getPlayerNumber(),
+                creepType.getId(),
+                sendCost.getGold()
+        ));
+
         LOG.info("Player {} sent {} to opponents",
                 player.getPlayerNumber(), creepType.getId());
 
@@ -341,6 +367,29 @@ public class Turrest01GameHandler {
 
         // Spawn creep for all other players
         turrestGame.getCreepManager().spawnSentCreep(creepType, player.getPlayerNumber(), turrestGame);
+    }
+
+    public void handleGetStats(SecuredClientToServerCommand<GetStatsCommand> command, ClientSession clientSession) {
+        UUID userId = clientSession.getUserId();
+        LOG.debug("[GET STATS] Player '{}' (userId={}) requesting stats", command.getUserName(), userId);
+
+        // Get the game for this player
+        Game<?> game = gameService.getGameByUserId(userId);
+
+        if (game == null) {
+            LOG.warn("No game found for user {}", userId);
+            clientSession.sendCommand(new ErrorMessageResponse("Not in a game"));
+            return;
+        }
+
+        if (!(game instanceof TurrestGameMode01 turrestGame)) {
+            LOG.warn("Game is not TurrestGameMode01");
+            clientSession.sendCommand(new ErrorMessageResponse("Invalid game type"));
+            return;
+        }
+
+        // Send stats response to the requesting player
+        clientSession.sendCommand(new StatsResponseCommand(turrestGame.getGameStats()));
     }
 
     private Turrest01Player findPlayerBySession(TurrestGameMode01 game, ClientSession session) {

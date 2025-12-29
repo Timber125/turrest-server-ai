@@ -8,6 +8,7 @@ import be.lefief.game.turrest01.commands.BatchedSpawnCreepCommand;
 import be.lefief.game.turrest01.commands.DespawnCreepCommand;
 import be.lefief.game.turrest01.commands.PlayerTakesDamageCommand;
 import be.lefief.game.turrest01.commands.ResourceEventCommand;
+import be.lefief.game.turrest01.event.CreepKilledEvent;
 import be.lefief.game.turrest01.resource.ResourceEventType;
 import be.lefief.game.turrest01.wave.Wave;
 import org.slf4j.Logger;
@@ -125,6 +126,9 @@ public class CreepManager {
                     int damage = creep.getType().getDamage();
                     player.takeDamage(damage);
 
+                    // Record damage taken for stats
+                    game.getGameStats().recordDamageTaken(creep.getOwnerPlayerNumber(), damage);
+
                     LOG.info("Creep {} reached castle, dealing {} damage to player {} (HP: {})",
                             creep.getId(), damage, player.getPlayerNumber(), player.getHitpoints());
 
@@ -173,6 +177,13 @@ public class CreepManager {
                 Turrest01Player player = game.getPlayerByNumber().get(playerNum);
                 if (player != null) {
                     creep.getType().getKillReward().apply(player);
+
+                    // Record kill event for stats
+                    game.recordEvent(new CreepKilledEvent(
+                            playerNum,
+                            creep.getType().getId(),
+                            creep.getType().getKillReward().getGold()
+                    ));
 
                     // Send resource event animation for kill reward
                     game.sendToPlayer(playerNum, new ResourceEventCommand(

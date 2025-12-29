@@ -1,15 +1,16 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { SettingsService } from './settings.service';
 
 /**
  * AudioService for playing game sound effects.
- * Supports loading and playing sounds for resource events.
+ * Uses SettingsService for volume management.
  */
 @Injectable({ providedIn: 'root' })
 export class AudioService {
+  private readonly settingsService = inject(SettingsService);
+
   private audioContext: AudioContext | null = null;
   private sounds: Map<string, AudioBuffer> = new Map();
-  private volume = 0.5;
-  private muted = false;
   private loaded = false;
 
   // Sound mappings for different event types
@@ -73,7 +74,8 @@ export class AudioService {
    * @param volumeMultiplier Optional volume multiplier (0-1)
    */
   play(soundId: string, volumeMultiplier = 1): void {
-    if (this.muted || !this.audioContext) return;
+    const effectiveVolume = this.settingsService.getEffectiveEffectsVolume();
+    if (effectiveVolume === 0 || !this.audioContext) return;
 
     const buffer = this.sounds.get(soundId);
     if (!buffer) {
@@ -86,7 +88,7 @@ export class AudioService {
       source.buffer = buffer;
 
       const gainNode = this.audioContext.createGain();
-      gainNode.gain.value = this.volume * volumeMultiplier;
+      gainNode.gain.value = effectiveVolume * volumeMultiplier;
 
       source.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
@@ -109,46 +111,32 @@ export class AudioService {
   }
 
   /**
-   * Set the master volume.
+   * Set the effects volume (delegates to SettingsService).
    * @param volume Volume level (0-1)
    */
   setVolume(volume: number): void {
-    this.volume = Math.max(0, Math.min(1, volume));
+    this.settingsService.setEffectsVolume(volume);
   }
 
   /**
-   * Get the current volume level.
+   * Get the current effective effects volume level.
    */
   getVolume(): number {
-    return this.volume;
+    return this.settingsService.getEffectiveEffectsVolume();
   }
 
   /**
-   * Mute all sounds.
-   */
-  mute(): void {
-    this.muted = true;
-  }
-
-  /**
-   * Unmute sounds.
-   */
-  unmute(): void {
-    this.muted = false;
-  }
-
-  /**
-   * Toggle mute state.
+   * Toggle mute state (delegates to SettingsService).
    */
   toggleMute(): boolean {
-    this.muted = !this.muted;
-    return this.muted;
+    this.settingsService.toggleMute();
+    return this.settingsService.muted();
   }
 
   /**
    * Check if audio is muted.
    */
   isMuted(): boolean {
-    return this.muted;
+    return this.settingsService.muted();
   }
 }
